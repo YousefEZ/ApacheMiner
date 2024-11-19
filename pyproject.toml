@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "apacheminer"
+version = "0.1.0"
+description = "COMP0104: Software Development Practice Coursework 2, which investigates the evidence that projects are adopting Test-First or Test-Driven Approach and how strictly they follow the practice."
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.12"
+PyDriller = "^2.7"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
