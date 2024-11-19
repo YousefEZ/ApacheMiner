@@ -42,3 +42,11 @@ poetry shell
 python3 src
 ```
 
+## :shield: Running Test 
+
+before pushing, make sure you run the noxfile to ensure that everything is working fine
+```bash 
+poetry run nox 
+```
+
+this will run the entire test suite, and ensure that linting, formatting, type hinting is correct
