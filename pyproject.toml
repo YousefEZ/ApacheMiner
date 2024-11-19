@@ -22,3 +22,4 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 mine = "src.__main__:mine"
 analyze = "src.__main__:analyze"
+cli = "src.__main__:cli"

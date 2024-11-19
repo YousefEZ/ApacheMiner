@@ -1,11 +1,19 @@
 import click
 
 
-@click.command()
+@click.group()
+def cli(): ...
+
+
+@cli.command()
 def mine():
     print("Mining...")
 
 
-@click.command()
+@cli.command()
 def analyze():
     print("Analyzing...")
+
+
+if __name__ == "__main__":
+    cli()
