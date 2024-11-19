@@ -17,3 +17,8 @@ def lint(session):
 def formatting(session):
     session.install("black")
     session.run("black", "src", "tests")
+
+
+@nox.session
+def type_check(session):
+    session.run("mypy", "src", "tests", external=True)
