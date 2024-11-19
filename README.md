@@ -17,14 +17,28 @@ To install the dependencies, run the following commands in the root directory of
 
 
 ```bash
-python3.12 -m poetry install 
+poetry install 
 ```
 
-and then run the virtual environment using the following
+### :gear: running commands
 
+to run the set commands in the project, you can use the following command 
+
+
+```bash 
+poetry run <command>
+
+```
+
+or you can run the cli using 
+```bash 
+poetry run cli
+```
+
+you can alternatively run the shell and directly run the cli 
 
 ```bash
-python3.12 -m poetry shell
+poetry shell
+python3 src
 ```
 
-You can then run the project normally using python3 
