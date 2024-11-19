@@ -26,3 +26,5 @@ and then run the virtual environment using the following
 ```bash
 python3.12 -m poetry shell
 ```
+
+You can then run the project normally using python3 
