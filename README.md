@@ -49,4 +49,19 @@ before pushing, make sure you run the noxfile to ensure that everything is worki
 poetry run nox 
 ```
 
-this will run the entire test suite, and ensure that linting, formatting, type hinting is correct
+this will run the entire test suite, and ensure that linting, formatting, type hinting is correct.
+
+
+## :whale: Using docker 
+
+You can also use docker to run the project, to build the docker image, you can use the following command 
+
+```bash
+docker build -t apache-miner .
+```
+
+to run the docker image, you can use the following command 
+
+```bash
+docker run -it apache-miner <command>
+```
