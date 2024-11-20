@@ -3,8 +3,8 @@ import csv
 import click
 import rich.progress
 
-from .driver import generate_driver
 from . import apache_list, github
+from .driver import generate_driver
 
 
 @click.group()

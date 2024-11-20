@@ -1,6 +1,5 @@
 from selenium import webdriver
 
-
 __all__ = ("generate_driver",)
 
 

@@ -37,7 +37,7 @@ def next_page(url: str) -> str:
 def retrieve_project_list(
     url: str, driver: webdriver.Chrome
 ) -> list[project.GithubProject]:
-    repositories = []
+    repositories: list[project.GithubProject] = []
     while True:
         driver.get(url)
         WebDriverWait(driver, 10).until(
