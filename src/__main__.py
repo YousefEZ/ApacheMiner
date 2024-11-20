@@ -29,16 +29,23 @@ def cli(): ...
 def fetch(): ...
 
 
+def print_if_not_silent(message: str, *, silent: bool = False):
+    if not silent:
+        console.print(message, emoji=True)
+
+
 @fetch.command()
 @click.argument("output", type=click.Path())
 @click.option("--no-attic", is_flag=True, help="Exclude attic projects")
 @click.option("--no-incubating", is_flag=True, help="Exclude incubating projects")
-@click.option("--no-dormant", is_flag=True, help="Exclude incubating projects")
+@click.option("--no-dormant", is_flag=True, help="Exclude dormant projects")
+@click.option("--silent", "-s", is_flag=True, help="Do not print projects")
 def apache(
     output: str,
     no_attic: bool = False,
     no_incubating: bool = False,
     no_dormant: bool = False,
+    silent: bool = False,
 ):
     driver = generate_driver()
     project_list = apache_list.retrieve_project_list(driver)
@@ -57,21 +64,22 @@ def apache(
                 ":rocket: Fetching projects...", total=len(project_list)
             )
             for project in project_list:
-                progress.console.print(
+                print_if_not_silent(
                     f":mag_right: Fetching GitHub Repository for {project.name}",
-                    emoji=True,
+                    silent=silent,
                 )
                 github_repository = project.fetch_github_project(driver)
                 if github_repository:
                     writer.writerow([project.name, github_repository.url])
-                    progress.console.print(
-                        "|--> :heavy_check_mark:  Repository [success]Found[/success]",
-                        emoji=True,
-                    )
-                else:
-                    progress.console.print(
-                        "|--> :x: Repository [danger]Not Found[/danger]", emoji=True
-                    )
+
+                print_if_not_silent(
+                    (
+                        "|-> :heavy_check_mark:  Repository [success]Found[/success]"
+                        if github_repository
+                        else "|-> :x: Repository [danger]Not Found[/danger]"
+                    ),
+                    silent=silent,
+                )
                 progress.advance(task)
 
     driver.quit()
@@ -112,5 +120,7 @@ def analyze():
 
 
 cli.add_command(fetch)
+
+
 if __name__ == "__main__":
     cli()
