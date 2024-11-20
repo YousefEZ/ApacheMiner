@@ -30,6 +30,14 @@ class ApacheProject:
     def in_attic(self):
         return "attic" in self.name
 
+    @property
+    def in_incubator(self):
+        return "Incubating" in self.name
+
+    @property
+    def is_dormant(self):
+        return "Dormant" in self.name
+
     def fetch_github_project(self, driver: webdriver.Chrome) -> Optional[GithubProject]:
         driver.get(self.url)
         WebDriverWait(driver, 20).until(
