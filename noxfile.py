@@ -7,12 +7,6 @@ def tests(session):
 
 
 @nox.session
-def lint(session):
-    session.install("flake8")
-    session.run("flake8", "src", "tests")
-
-
-@nox.session
 def isort(session):
     session.install("isort")
     session.run("isort", "src", "tests")
@@ -22,6 +16,12 @@ def isort(session):
 def formatting(session):
     session.install("black")
     session.run("black", "src", "tests")
+
+
+@nox.session
+def lint(session):
+    session.install("flake8")
+    session.run("flake8", "src", "tests")
 
 
 @nox.session
