@@ -13,6 +13,9 @@ python = "^3.12"
 pydriller = "^2.7"
 rich = "^13.9.4"
 click = "^8.1.7"
+selenium = "^4.26.1"
+bs4 = "^0.0.2"
+types-beautifulsoup4 = "^4.12.0.20241020"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
@@ -20,12 +23,16 @@ nox = "^2024.10.9"
 pylint = "^3.3.1"
 pytest = "^8.3.3"
 mypy = "^1.13.0"
+isort = "^5.13.2"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-mine = "src.__main__:mine"
+fetch = "src.__main__:fetch"
 analyze = "src.__main__:analyze"
 cli = "src.__main__:cli"
+
+[tool.black]
+line-length = 79
