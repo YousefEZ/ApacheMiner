@@ -14,6 +14,12 @@ def lint(session):
 
 
 @nox.session
+def isort(session):
+    session.install("isort")
+    session.run("isort", "src", "tests")
+
+
+@nox.session
 def formatting(session):
     session.install("black")
     session.run("black", "src", "tests")
