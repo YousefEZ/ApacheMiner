@@ -31,7 +31,6 @@ ENV PATH=$CHROMEDRIVER_DIR:$PATH
 # Clean upa
 RUN rm /tmp/chrome-linux64.zip /tmp/chromedriver-linux64.zip /tmp/versions.json
 
-# Copy your Python script into the container
 WORKDIR /miner
 
 COPY . .
