@@ -1,6 +1,6 @@
-from typing import Iterable
 import random
 from itertools import chain
+from typing import Iterable
 
 import hypothesis
 import hypothesis.strategies
@@ -8,45 +8,48 @@ import hypothesis.strategies
 from src.github import (
     CUSTOM_ATTRIBUTE,
     TITLE_DATA_TEST_ID,
-    scrape_github_projects,
     next_page,
+    scrape_github_projects,
 )
+
+BASE_URL = "https://github.com/orgs/apache/repositories"
 
 
 def test_next_page_no_filter():
-    url = "https://github.com/orgs/apache/repositories"
-    assert next_page(url) == f"{url}?page=2"
+    assert next_page(BASE_URL) == f"{BASE_URL}?page=2"
 
 
 def test_next_page_no_filter_second_page():
-    url = "https://github.com/orgs/apache/repositories?page=2"
+    url = f"{BASE_URL}?page=2"
     assert next_page(url) == f"{url[:-1]}3"
 
 
 def test_next_page_with_filter():
-    url = "https://github.com/orgs/apache/repositories?q=language%3AC%2B%2B"
+    url = f"{BASE_URL}?q=language%3AC%2B%2B"
     assert next_page(url) == f"{url}&page=2"
 
 
 def test_next_page_with_filter_second_page():
-    url = "https://github.com/orgs/apache/repositories?q=language%3AC%2B%2B&page=2"
+    url = f"{BASE_URL}?q=language%3AC%2B%2B&page=2"
     assert next_page(url) == f"{url[:-1]}3"
 
 
 def generate_positive_hyperlinks(number: int) -> Iterable[str]:
     for _ in range(number):
-        yield f"<a {CUSTOM_ATTRIBUTE}='{TITLE_DATA_TEST_ID}' href='/orgs/apache/repositories'>Apache</a>"
+        yield f"<a {CUSTOM_ATTRIBUTE}='{TITLE_DATA_TEST_ID}' href='/home'></a>"
     return None
 
 
 def generate_missing_attribute_hyperlinks(number: int) -> Iterable[str]:
     for _ in range(number):
-        yield "<a href='/orgs/apache/repositories'>Apache</a>"
+        yield "<a>Apache</a>"
 
 
-def generate_incorrect_attribute_value_hyperlinks(number: int) -> Iterable[str]:
+def generate_incorrect_attribute_value_hyperlinks(
+    number: int,
+) -> Iterable[str]:
     for _ in range(number):
-        yield f"<a {CUSTOM_ATTRIBUTE}='INCORRECT' href='/orgs/apache/repositories'>Apache</a>"
+        yield f"<a {CUSTOM_ATTRIBUTE}='INCORRECT'>Apache</a>"
 
 
 def generate_random_html(
