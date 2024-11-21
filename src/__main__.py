@@ -56,31 +56,32 @@ def apache(
     if no_dormant:
         project_list = [project for project in project_list if not project.is_dormant]
 
-    with open(output, "w") as f:
+    with open(output, "w") as f, rich.progress.Progress(console=console) as progress:
         writer = csv.writer(f)
         writer.writerow(HEADER)
-        with rich.progress.Progress(console=console) as progress:
-            task = progress.add_task(
-                ":rocket: Fetching projects...", total=len(project_list)
-            )
-            for project in project_list:
-                print_if_not_silent(
-                    f":mag_right: Fetching GitHub Repository for {project.name}",
-                    silent=silent,
-                )
-                github_repository = project.fetch_github_project(driver)
-                if github_repository:
-                    writer.writerow([project.name, github_repository.url])
 
-                print_if_not_silent(
-                    (
-                        "|-> :heavy_check_mark:  Repository [success]Found[/success]"
-                        if github_repository
-                        else "|-> :x: Repository [danger]Not Found[/danger]"
-                    ),
-                    silent=silent,
-                )
-                progress.advance(task)
+        task = progress.add_task(
+            ":rocket: Fetching projects...", total=len(project_list)
+        )
+
+        for project in project_list:
+            print_if_not_silent(
+                f":mag_right: Fetching GitHub Repository for {project.name}",
+                silent=silent,
+            )
+            github_repository = project.fetch_github_project(driver)
+            if github_repository:
+                writer.writerow([project.name, github_repository.url])
+
+            print_if_not_silent(
+                (
+                    "|-> :heavy_check_mark:  Repository [success]Found[/success]"
+                    if github_repository
+                    else "|-> :x: Repository [danger]Not Found[/danger]"
+                ),
+                silent=silent,
+            )
+            progress.advance(task)
 
     driver.quit()
 
@@ -101,16 +102,15 @@ def github_list(url: str, output: str):
 
     console.print(f"Found [cyan]{len(project_list)}[/cyan] projects")
 
-    with open(output, "w") as f:
-        with rich.progress.Progress() as progress:
-            task = progress.add_task(
-                ":pencil2:  Writing projects...", emoji=True, total=len(project_list)
-            )
-            writer = csv.writer(f)
-            writer.writerow(HEADER)
-            for project in project_list:
-                writer.writerow([project.name, project.url])
-                progress.advance(task)
+    with open(output, "w") as f, rich.progress.Progress() as progress:
+        task = progress.add_task(
+            ":pencil2:  Writing projects...", emoji=True, total=len(project_list)
+        )
+        writer = csv.writer(f)
+        writer.writerow(HEADER)
+        for project in project_list:
+            writer.writerow([project.name, project.url])
+            progress.advance(task)
     driver.quit()
 
 
