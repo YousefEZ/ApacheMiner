@@ -9,13 +9,13 @@ def tests(session):
 @nox.session
 def isort(session):
     session.install("isort")
-    session.run("isort", "src", "tests")
+    session.run("isort", "src", "tests", "--check")
 
 
 @nox.session
 def formatting(session):
     session.install("black")
-    session.run("black", "src", "tests")
+    session.run("black", "src", "tests", "--check")
 
 
 @nox.session
