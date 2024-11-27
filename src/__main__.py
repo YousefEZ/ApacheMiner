@@ -5,7 +5,7 @@ import click
 import rich.progress
 import rich.theme
 
-from . import apache_list, github
+from . import apache_list, github, driller
 from .driver import generate_driver
 
 HEADER = ["name", "repository"]
@@ -114,13 +114,57 @@ def github_list(url: str, output: str):
     driver.quit()
 
 
+@click.group()
+def drill(): ...
+
+
+@drill.command()
+@click.option("--url", "-u", type=str, required=True)
+@click.option("--output", "-o", type=str, required=True)
+def repository(url: str, output: str) -> None:
+    with rich.progress.Progress(console=console) as progress:
+        driller.drill_repository(url, output, progress)
+
+
+@drill.command()
+@click.option("--input", "-i", "input_file", type=click.Path(), required=True)
+@click.option(
+    "--output-pattern",
+    "-o",
+    "output",
+    nargs=2,
+    help="first argument is the match pattern, second is tht pattern e.g. %s outputs/commits_%s.csv",
+    required=True,
+)
+def repositories(
+    input_file: str,
+    output: tuple[str, str],
+) -> None:
+    with open(input_file, "r") as f, rich.progress.Progress(
+        rich.progress.SpinnerColumn(),
+        *rich.progress.Progress.get_default_columns(),
+        console=console,
+    ) as progress:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
+        task_id = progress._task_index
+        for idx, row in enumerate(progress.track(rows)):
+            progress.tasks[
+                task_id
+            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            driller.drill_repository(
+                row["repository"], output[1].replace(output[0], row["name"]), progress
+            )
+
+
 @cli.command()
 def analyze():
     print("Analyzing...")
 
 
 cli.add_command(fetch)
-
+cli.add_command(drill)
 
 if __name__ == "__main__":
     cli()
