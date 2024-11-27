@@ -2,11 +2,11 @@ import csv
 import json
 from typing import Optional
 
-from bs4 import BeautifulSoup
+import pydriller
 import rich
 import rich.progress
+from bs4 import BeautifulSoup
 from urllib3 import request
-import pydriller
 
 
 def fetch_number_of_commits(url: str) -> Optional[int]:
