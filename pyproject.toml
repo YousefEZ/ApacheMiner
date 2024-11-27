@@ -40,3 +40,6 @@ line-length = 88
 
 [tool.mypy]
 disable_error_code = "import-untyped"
+
+[tool.isort]
+profile = "black"
