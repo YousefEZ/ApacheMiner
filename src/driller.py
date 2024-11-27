@@ -53,4 +53,3 @@ def drill_repository(
             )
 
         progress.tasks[task].visible = False
-        # progress.refresh()
