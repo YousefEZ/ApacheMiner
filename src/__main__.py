@@ -133,7 +133,7 @@ def repository(url: str, output: str) -> None:
     "-o",
     "output",
     nargs=2,
-    help="first argument is the match pattern, second is tht pattern e.g. %s outputs/commits_%s.csv",
+    help="match pattern followed by pattern e.g. %s outputs/commits_%s.csv",
     required=True,
 )
 def repositories(
