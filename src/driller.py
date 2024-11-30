@@ -42,6 +42,23 @@ def fetch_number_of_commits(url: str) -> Optional[int]:
     return None
 
 
+def format_file(file: pydriller.ModifiedFile, delimiter: str = "|") -> str:
+    if file.change_type == pydriller.ModificationType.RENAME:
+        return f"{file.old_path}{delimiter}{file.new_path}"
+    elif file.change_type == pydriller.ModificationType.DELETE:
+        assert file.old_path
+        return file.old_path
+    elif (
+        file.change_type == pydriller.ModificationType.ADD
+        or file.change_type == pydriller.ModificationType.COPY
+        or file.change_type == pydriller.ModificationType.MODIFY
+    ):
+        assert file.new_path
+        return file.new_path
+
+    assert False, f"Unknown change type: {file.change_type}"
+
+
 def drill_repository(
     url: str, output_file: str, progress: rich.progress.Progress, delimiter: str = "|"
 ) -> None:
@@ -51,26 +68,16 @@ def drill_repository(
             f"Fetching commits for [cyan]{url}[/cyan]", total=commit_count
         )
         writer = csv.DictWriter(f, fieldnames=["hash", "file", "modification_type"])
+        writer.writeheader()
         for commit in pydriller.Repository(url).traverse_commits():
             progress.advance(task)
             for file in commit.modified_files:
-                if file.change_type == pydriller.ModificationType.RENAME:
-                    writer.writerow(
-                        {
-                            "hash": commit.hash,
-                            "file": f"{file.old_path}{delimiter}{file.new_path}",
-                            "modification_type": modification_map[
-                                pydriller.ModificationType.RENAME
-                            ],
-                        }
-                    )
-                else:
-                    writer.writerow(
-                        {
-                            "hash": commit.hash,
-                            "file": file.filename,
-                            "modification_type": modification_map[file.change_type],
-                        }
-                    )
+                writer.writerow(
+                    {
+                        "hash": commit.hash,
+                        "file": format_file(file, delimiter),
+                        "modification_type": modification_map[file.change_type],
+                    }
+                )
 
         progress.tasks[task].visible = False
