@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
 import itertools
+import operator
 
 from .driller import modification_map
 
@@ -24,7 +25,7 @@ class TransactionMap(NamedTuple):
 
 @dataclass(frozen=True)
 class Transaction:
-    mapper: TransactionMap
+    maps: TransactionMap
     transactions: list[list[int]]
 
 
@@ -40,22 +41,26 @@ def open_as_csv(
 
 
 @open_as_csv
-def convert_drilled_into_transaction(reader: csv.DictReader) -> Transaction:
+def convert_into_transaction(reader: csv.DictReader) -> Transaction:
     lines = list(reader)
-    commits = list(itertools.groupby(lines, key=lambda line: line["hash"]))
+    commits = itertools.groupby(lines, operator.itemgetter("hash"))
 
     id_counter = 0
     id_map = dict()
     name_map = dict()
-    items = list()
     transactions = []
 
     for _, commit in commits:
-        for change in commit:
+        group = list(commit)
+        items = []
+        for change in group:
             modification_type = pydriller.ModificationType(
                 reverse_modification_map[change["modification_type"]]
             )
-            if modification_type == pydriller.ModificationType.ADD:
+            if (
+                modification_type == pydriller.ModificationType.ADD
+                or modification_type == pydriller.ModificationType.COPY
+            ):
                 # Added file, is not allowed to exist already
                 id = change["file"].strip()
                 assert id not in id_map
@@ -89,11 +94,6 @@ def convert_drilled_into_transaction(reader: csv.DictReader) -> Transaction:
                 name_map[idNum].append(newId)
                 id_map[newId] = idNum
                 items.append(idNum)
-            else:
-                # Something else, should be the commit id and message.
-                # Write current set and start new set
-                transactions.append(" ".join(map(str, sorted(items))))
-                items.clear()
-    transactions.append(" ".join(map(str, sorted(items))))
 
+        transactions.append(sorted(items))
     return Transaction(TransactionMap(id_map, name_map), transactions)
