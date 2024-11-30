@@ -1,14 +1,20 @@
 import csv
 import re
 import json
+from typing import Optional, ParamSpec
+import os
 
 import click
 import rich.progress
 import rich.theme
 import rich.table
 
+from src.spmf.association import run_apriori
+
 from . import apache_list, driller, github, transaction
 from .driver import generate_driver
+
+P = ParamSpec("P")
 
 HEADER = ["name", "repository"]
 
@@ -179,20 +185,34 @@ def analyze(): ...
 
 
 @analyze.command()
-@click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
+@click.option("--transactions", "-t", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
 @click.option("--display", "-d", "display", is_flag=True, default=False)
 @click.option("--limit", "-l", type=int, default=2)
 @click.option("--must-have", "-mh", type=str)
+@click.option("--dump-intermediary", "-di", type=click.Path())
+@click.option("--percentage", "-p", type=float, default=0.75)
 def association(
-    _input_file: str, map_file: str, display: bool, limit: int, must_have: str
+    transactions: str,
+    map_file: str,
+    display: bool,
+    limit: int,
+    must_have: str,
+    dump_intermediary: Optional[str],
+    percentage: float,
 ) -> None:
+    run_apriori(transactions, "output.txt", percentage)
+    if dump_intermediary:
+        ensure_dir = os.path.dirname(dump_intermediary)
+        if not os.path.exists(ensure_dir):
+            os.makedirs(ensure_dir)
+
     with open(map_file, "r") as map_reader:
         name_map = json.load(map_reader)
 
     associated_files = []
     largest_associated = 1
-    with open(_input_file, "r") as reader:
+    with open("output.txt", "r") as reader:
         while line := reader.readline():
             raw_associated, strength = line.strip().split("#SUP:")
             associated: list[str] = list(
