@@ -56,7 +56,6 @@ def format_file(file: pydriller.ModifiedFile, delimiter: str = "|") -> str:
         assert file.new_path
         return file.new_path
 
-    print(file.filename)
     assert False, f"Unknown change type: {file.change_type}"
 
 
