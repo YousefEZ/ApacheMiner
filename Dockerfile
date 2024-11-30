@@ -31,6 +31,13 @@ ENV PATH=$CHROMEDRIVER_DIR:$PATH
 # Clean upa
 RUN rm /tmp/chrome-linux64.zip /tmp/chromedriver-linux64.zip /tmp/versions.json
 
+# Adding Java 
+RUN apt install openjdk-22-jdk
+
+RUN mkdir .spmf
+
+RUN curl -s https://www.philippe-fournier-viger.com/spmf/spmf.jar > .spmf/spmf.jar
+
 WORKDIR /miner
 
 COPY . .
