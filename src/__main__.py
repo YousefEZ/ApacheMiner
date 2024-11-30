@@ -150,9 +150,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[
-                task_id
-            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            progress.tasks[task_id].description = (
+                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            )
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )

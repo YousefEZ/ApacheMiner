@@ -1,14 +1,13 @@
 import csv
+import itertools
+import operator
 from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
-import itertools
-import operator
-
-from .driller import modification_map
 
 import pydriller
 
+from .driller import modification_map
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -61,7 +60,6 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
                 modification_type == pydriller.ModificationType.ADD
                 or modification_type == pydriller.ModificationType.COPY
             ):
-                # Added file, is not allowed to exist already
                 id = change["file"].strip()
                 assert id not in id_map
                 id_counter += 1
@@ -70,7 +68,6 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
                 idNum = id_counter
                 items.append(idNum)
             elif modification_type == pydriller.ModificationType.DELETE:
-                # Deleted file, must exist already
                 id = change["file"].strip()
                 assert id in id_map
                 id_counter += 1
@@ -78,14 +75,12 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
                 del id_map[id]
                 items.append(idNum)
             elif modification_type == pydriller.ModificationType.MODIFY:
-                # Changed file, must exist already
                 id = change["file"].strip()
                 assert id in id_map
                 id_counter += 1
                 idNum = id_map[id]
                 items.append(idNum)
             elif modification_type == pydriller.ModificationType.RENAME:
-                # Renamed file, old must exist already and new is not allowed to exist already.
                 oldId, newId = change["file"].split("|")
                 assert oldId in id_map
                 assert newId not in id_map
