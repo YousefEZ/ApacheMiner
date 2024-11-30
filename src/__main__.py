@@ -5,7 +5,7 @@ import click
 import rich.progress
 import rich.theme
 
-from . import apache_list, driller, github
+from . import apache_list, driller, github, transaction
 from .driver import generate_driver
 
 HEADER = ["name", "repository"]
@@ -156,6 +156,21 @@ def repositories(
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
+
+
+@cli.command()
+@click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
+@click.option("--output", "-o", type=click.Path(), required=True)
+@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
+def transform(_input_file: str, output: str, map_file: str) -> None:
+    result = transaction.convert_into_transaction(_input_file)
+    with open(output, "w") as writer:
+        for changes in result.transactions:
+            writer.write(" ".join(map(str, changes)) + "\n")
+
+    with open(map_file, "w") as map_writer:
+        for key, value in result.maps.names.items():
+            map_writer.write(f"{key}: {value}\n")
 
 
 @cli.command()
