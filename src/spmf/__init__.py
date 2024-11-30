@@ -1,6 +1,6 @@
 import os
-from typing import Callable, ParamSpec
 from functools import wraps
+from typing import Callable, ParamSpec
 
 import requests
 from rich.console import Console
