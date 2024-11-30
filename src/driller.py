@@ -56,6 +56,7 @@ def format_file(file: pydriller.ModifiedFile, delimiter: str = "|") -> str:
         assert file.new_path
         return file.new_path
 
+    print(file.filename)
     assert False, f"Unknown change type: {file.change_type}"
 
 
@@ -72,6 +73,10 @@ def drill_repository(
         for commit in pydriller.Repository(url).traverse_commits():
             progress.advance(task)
             for file in commit.modified_files:
+                if file.change_type == pydriller.ModificationType.UNKNOWN:
+                    # this is persmission changes
+                    continue
+
                 writer.writerow(
                     {
                         "hash": commit.hash,
