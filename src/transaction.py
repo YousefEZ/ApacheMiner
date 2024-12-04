@@ -92,3 +92,54 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
 
         transactions.append(sorted(items))
     return Transaction(TransactionMap(id_map, name_map), transactions)
+
+
+### CONVERT FOR SPM-FC-L ###
+def get_source_test_pairs(all_files) -> set[tuple[str, str]]:
+    # TODO: Comprehensive (source, test) pairing - this is a temporary solution
+    map_idx = 0
+    java_files = {}
+    pairs = set()
+    
+    for idx, fileArr in all_files:
+        path = fileArr[0].split("/")
+        filename = f"{path[0]}/{path[-1]}"
+        if filename.endswith(".java"):
+            if filename not in java_files:
+                    java_files[filename] = idx
+
+    for file in java_files:
+        if file.endswith("Test.java"):
+            non_test_file = file.replace("Test.java", ".java")
+            if non_test_file in java_files:
+                pairs.add((java_files[non_test_file], java_files[file]))
+        else:
+            test_file = file.replace(".java", "Test.java")
+            if test_file in java_files:
+                pairs.add((java_files[file], java_files[test_file]))
+                
+    return pairs
+
+def convert_for_spm(in_file) -> set[str]:
+    transactions = convert_into_transaction(in_file)
+    name_map = transactions.maps.names
+    map_items = name_map.items()
+    commits = transactions.transactions
+    pairs = get_source_test_pairs(map_items)
+    
+    # define various mappings for high speed lookup
+    lines = {source: '' for (source,_) in pairs}
+    test_to_source = {test: source for (source, test) in pairs}
+
+    # iterate over commits to fill in a line for each (source, test) pair
+    commit_no = 0
+    for commit in commits:
+        commit_no += 1
+        for file_idx in commit:
+            if file_idx in lines:           # source file
+                lines[file_idx] += f"<{commit_no}> {file_idx} -1 "
+            if file_idx in test_to_source:  # test file
+                lines[test_to_source[file_idx]] += f"<{commit_no}> {file_idx} -1 "
+    for line in lines:
+        lines[line] = lines[line] + "-2"
+    return lines.values(), map_items
