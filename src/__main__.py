@@ -157,14 +157,12 @@ def repositories(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
 
-@click.group()
-def transform(): ...
 
-@transform.command(name="list")
+@cli.command()
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-def transform_transaction(_input_file: str, output: str, map_file: str) -> None:
+def transform(_input_file: str, output: str, map_file: str) -> None:
     result = transaction.convert_into_transaction(_input_file)
     with open(output, "w") as writer:
         for changes in result.transactions:
@@ -174,19 +172,6 @@ def transform_transaction(_input_file: str, output: str, map_file: str) -> None:
         for key, value in result.maps.names.items():
             map_writer.write(f"{key}: {value}\n")
 
-@transform.command(name="sequence")
-@click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
-@click.option("--output", "-o", type=click.Path(), required=True)
-@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-def transform_spm(_input_file: str, output: str, map_file: str) -> None:
-    lines, map = transaction.convert_for_spm(_input_file)
-    with open(output, "w") as writer:
-        for line in lines:
-            writer.write(str(line) + "\n")
-    
-    with open(map_file, "w") as map_writer:
-        for key, value in map:
-            map_writer.write(f"{key}: {value}\n")
 
 @cli.command()
 def analyze():
@@ -195,7 +180,6 @@ def analyze():
 
 cli.add_command(fetch)
 cli.add_command(drill)
-cli.add_command(transform)
 
 if __name__ == "__main__":
     cli()
