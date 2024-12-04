@@ -95,7 +95,7 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
 
 
 # CONVERT FOR SPM-FC-L #
-def get_source_test_pairs(all_files) -> set[tuple[str, str]]:
+def get_source_test_pairs(all_files) -> set[tuple[int, int]]:
     # TODO: Comprehensive (source, test) pairing - this is a temporary solution
     java_files = dict()
     pairs = set()
@@ -137,9 +137,9 @@ def convert_for_spm(in_file) -> tuple[list[str], TransactionMap]:
         commit_no += 1
         for file_idx in commit:
             if file_idx in lines:  # source file
-                lines[str(file_idx)] += f"<{commit_no}> {file_idx} -1 "
+                lines[file_idx] += f"<{commit_no}> {file_idx} -1 "
             if file_idx in test_to_source:  # test file
-                lines[test_to_source[str(file_idx)]] += f"<{commit_no}> {file_idx} -1 "
+                lines[test_to_source[file_idx]] += f"<{commit_no}> {file_idx} -1 "
     for line in lines:
         lines[line] = lines[line] + "-2"
     return list(lines.values()), transactions.maps
