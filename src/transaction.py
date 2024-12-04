@@ -1,6 +1,7 @@
 import csv
 import itertools
 import operator
+from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
@@ -95,10 +96,10 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
 
 
 # CONVERT FOR SPM-FC-L #
-def get_source_test_pairs(all_files) -> set[tuple[int, int]]:
+def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> dict[int, str]:
     # TODO: Comprehensive (source, test) pairing - this is a temporary solution
     java_files = dict()
-    pairs = set()
+    pairs = dict()
 
     for idx, fileArr in all_files:
         path = fileArr[0].split("/")
@@ -111,30 +112,29 @@ def get_source_test_pairs(all_files) -> set[tuple[int, int]]:
         if file.endswith("Test.java"):
             non_test_file = file.replace("Test.java", ".java")
             if non_test_file in java_files:
-                pairs.add((java_files[non_test_file], java_files[file]))
+                pairs[java_files[non_test_file]] = str(java_files[file])
         else:
             test_file = file.replace(".java", "Test.java")
             if test_file in java_files:
-                pairs.add((java_files[file], java_files[test_file]))
+                pairs[java_files[file]] = str(java_files[test_file])
 
     return pairs
 
 
-def convert_for_spm(in_file) -> tuple[list[str], TransactionMap]:
+def convert_for_spm(in_file: str) -> tuple[list[str], TransactionMap]:
     transactions = convert_into_transaction(in_file)
     name_map = transactions.maps.names
     map_items = name_map.items()
     commits = transactions.transactions
-    pairs = get_source_test_pairs(map_items)
+    lines = get_source_test_pairs(map_items)
 
     # define various mappings for high speed lookup
-    lines = {source: "" for (source, _) in pairs}
-    test_to_source = {test: source for (source, test) in pairs}
+    test_to_source = {int(test): source for (source, test) in lines.items()}
+    for source_idx in lines:
+        lines[source_idx] = ""
 
     # iterate over commits to fill in a line for each (source, test) pair
-    commit_no = 0
-    for commit in commits:
-        commit_no += 1
+    for commit_no, commit in enumerate(commits, start=1):
         for file_idx in commit:
             if file_idx in lines:  # source file
                 lines[file_idx] += f"<{commit_no}> {file_idx} -1 "
