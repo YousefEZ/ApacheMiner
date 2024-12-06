@@ -1,10 +1,5 @@
-import os
 from pathlib import Path
 
-import pytest
-import rich
-
-from src.driller import drill_repository
 from src.transaction import (
     TransactionMap,
     convert_for_spm,
@@ -14,31 +9,14 @@ from src.transaction import (
 
 
 class TestTransform:
-    input_file = Path("jdo_commits.txt")
-
-    @classmethod
-    @pytest.fixture(scope="class", autouse=True)
-    def setup_class(cls):
-        """SETUP TEMPORARY FILE ONCE FOR ALL TESTS"""
-        with rich.progress.Progress(console=rich.console.Console()) as progress:
-            drill_repository(
-                url="https://github.com/apache/db-jdo",
-                output_file=cls.input_file,
-                progress=progress,
-            )
-
-        yield  # run all tests
-
-        """TEARDOWN TEMPORARY FILE ONCE AFTER ALL TESTS"""
-        if os.path.exists(cls.input_file):
-            os.remove(cls.input_file)
+    input_file = Path.cwd() / "tests" / "data" / "commits.txt"
 
     def test_both_transforms_use_same_map(self):
         """Verify that list and sequence transforms produce consistent map files"""
         # Run both transformations
-        list_transactions = convert_into_transaction(self.__class__.input_file)
+        list_transactions = convert_into_transaction(self.input_file)
         list_map = list_transactions.maps
-        _, spm_map = convert_for_spm(self.__class__.input_file)
+        _, spm_map = convert_for_spm(self.input_file)
 
         # Maps should contain same file mappings
         assert isinstance(list_map, TransactionMap) and isinstance(
@@ -57,7 +35,7 @@ class TestTransform:
 
     def test_map_format(self):
         """Verify that map files are formatted correctly"""
-        transactions, map = convert_for_spm(self.__class__.input_file)
+        transactions, map = convert_for_spm(self.input_file)
         assert len(map.names) > 0, "Map file should not be empty"
         assert isinstance(
             map, TransactionMap
@@ -70,7 +48,7 @@ class TestTransform:
 
     def test_spm_output_format(self):
         """Verify that SPM output is formatted correctly"""
-        transactions, map = convert_for_spm(self.__class__.input_file)
+        transactions, map = convert_for_spm(self.input_file)
         for line in transactions:
             assert isinstance(line, str), "Transactions should be in string format"
             assert line.endswith("-2"), "Transactions should end with -2"
@@ -86,7 +64,7 @@ class TestTransform:
 
     def test_spm_lines_match_pairs(self):
         """Verify that SPM transactions contain correct source-test file pairs"""
-        transactions, map = convert_for_spm(self.__class__.input_file)
+        transactions, map = convert_for_spm(self.input_file)
         pairs = get_source_test_pairs(map.names.items())
         for line in transactions:
             for source_idx in pairs:
