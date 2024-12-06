@@ -75,7 +75,7 @@ class TestTransform:
             assert isinstance(line, str), "Transactions should be in string format"
             assert line.endswith("-2"), "Transactions should end with -2"
             line_split = line.split(" -1 ")
-            del line_split[-1]      # remove -2 element
+            del line_split[-1]  # remove -2 element
             for item in line_split:
                 parts = item.split(" ")
                 assert len(parts) == 2, "Transaction item should have two parts"
