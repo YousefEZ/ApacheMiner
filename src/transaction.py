@@ -137,9 +137,13 @@ def convert_for_spm(in_file: str) -> tuple[list[str], TransactionMap]:
     for commit_no, commit in enumerate(commits, start=1):
         for file_idx in commit:
             if file_idx in lines:  # source file
-                lines[file_idx] += f"<{commit_no}> {file_idx} -1 "
+                lines[file_idx] += format_line(commit_no, file_idx)
             if file_idx in test_to_source:  # test file
-                lines[test_to_source[file_idx]] += f"<{commit_no}> {file_idx} -1 "
+                lines[test_to_source[file_idx]] += format_line(commit_no, file_idx)
     for line in lines:
         lines[line] = lines[line] + "-2"
     return list(lines.values()), transactions.maps
+
+
+def format_line(commit_no: int, file_idx: int) -> str:
+    return f"<{commit_no}> {file_idx} -1 "
