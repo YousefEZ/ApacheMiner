@@ -181,11 +181,46 @@ def transform_list(_input_file: str, output: str, map_file: str) -> None:
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-def transform_spm(_input_file: str, output: str, map_file: str) -> None:
-    lines, name_map = transaction.convert_for_spm(_input_file)
+def transform_sequences(_input_file: str, output: str, map_file: str) -> None:
+    lines_commit, name_map, _ = transaction.get_sequences(_input_file)
     with open(output, "w") as writer:
-        for line in lines:
+        for line in lines_commit.values():
             writer.write(str(line) + "\n")
+
+    with open(map_file, "w") as map_writer:
+        for key, value in name_map.names.items():
+            map_writer.write(f"{key}: {value}\n")
+
+
+@transform.command(name="spmf")
+@click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
+@click.option("--output", "-o", type=click.Path(), required=True)
+@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
+@click.option(
+    "--tfd-leniency",
+    "tfd",
+    type=int,
+    required=False,
+    default=1,
+    help="How many source files can be changed "
+    + "while still considering test commits under TFD",
+)
+@click.option(
+    "--tdd-leniency",
+    "tdd",
+    type=int,
+    required=False,
+    default=3,
+    help="How far apart can source and test files be committed "
+    + "while still considering them under TDD",
+)
+def transform_spmf(
+    _input_file: str, output: str, map_file: str, tfd: int, tdd: int
+) -> None:
+    lines_spmf, name_map = transaction.my_spmf(_input_file, tfd, tdd)
+    with open(output, "w") as writer:
+        for commit_info in lines_spmf:
+            writer.write(str(commit_info) + "\n")
 
     with open(map_file, "w") as map_writer:
         for key, value in name_map.names.items():

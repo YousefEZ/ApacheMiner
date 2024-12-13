@@ -1,6 +1,7 @@
 import csv
 import itertools
 import operator
+import statistics
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import wraps
@@ -96,10 +97,52 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
 
 
 # CONVERT FOR SPM-FC-L #
-def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> dict[int, str]:
+class TwoWayDict(dict):
+    def __init__(self, *args, **kwargs):
+        self.keys = dict()
+        self.values = dict()
+
+    def __setitem__(self, key, value):
+        if key in self:
+            del self[key]
+        if value in self:
+            del self[value]
+        self.keys.__setitem__(key, value)
+        self.values.__setitem__(value, key)
+
+    def __getitem__(self, x):
+        if x in self.keys:
+            return self.keys[x]
+        return self.values[x]
+
+    def get_keys(self):
+        return self.keys.keys()
+
+    def get_values(self):
+        return self.values.keys()
+
+    def __delitem__(self, x):
+        if x in self.keys:
+            self.values.__delitem__(self.keys[x])
+            self.keys.__delitem__(x)
+        elif x in self.values:
+            self.keys.__delitem__(self.values[x])
+            self.values.__delitem__(x)
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __str__(self):
+        return str(self.keys)
+
+    def __contains__(self, x):
+        return x in self.keys or x in self.values
+
+
+def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> TwoWayDict:
     # TODO: Comprehensive (source, test) pairing - this is a temporary solution
     java_files = dict()
-    pairs = dict()
+    pairs = TwoWayDict()
 
     for idx, fileArr in all_files:
         path = fileArr[0].split("/")
@@ -112,38 +155,127 @@ def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> dict[in
         if file.endswith("Test.java"):
             non_test_file = file.replace("Test.java", ".java")
             if non_test_file in java_files:
-                pairs[java_files[non_test_file]] = str(java_files[file])
-        else:
-            test_file = file.replace(".java", "Test.java")
-            if test_file in java_files:
-                pairs[java_files[file]] = str(java_files[test_file])
+                pairs[java_files[non_test_file]] = java_files[file]
 
     return pairs
 
 
-def convert_for_spm(in_file: str) -> tuple[list[str], TransactionMap]:
+def get_sequences(in_file: str) -> tuple[dict[int, str], TransactionMap, TwoWayDict]:
     transactions = convert_into_transaction(in_file)
     name_map = transactions.maps.names
     map_items = name_map.items()
     commits = transactions.transactions
-    lines = get_source_test_pairs(map_items)
-
+    pairs = get_source_test_pairs(map_items)
+    lines = dict()
     # define various mappings for high speed lookup
-    test_to_source = {int(test): source for (source, test) in lines.items()}
-    for source_idx in lines:
-        lines[source_idx] = ""
-
+    for idx in pairs.get_keys():
+        lines[idx] = ""
     # iterate over commits to fill in a line for each (source, test) pair
     for commit_no, commit in enumerate(commits, start=1):
         for file_idx in commit:
             if file_idx in lines:  # source file
                 lines[file_idx] += format_line(commit_no, file_idx)
-            if file_idx in test_to_source:  # test file
-                lines[test_to_source[file_idx]] += format_line(commit_no, file_idx)
+            elif (
+                file_idx in pairs.get_values() and pairs[file_idx] in lines
+            ):  # test file
+                lines[pairs[file_idx]] += format_line(commit_no, file_idx)
     for line in lines:
         lines[line] = lines[line] + "-2"
-    return list(lines.values()), transactions.maps
+    return lines, transactions.maps, pairs
 
 
 def format_line(commit_no: int, file_idx: int) -> str:
     return f"<{commit_no}> {file_idx} -1 "
+
+
+# PROCESS LINE BY LINE FILE COMMITS #
+class TDDInfo:
+    def __init__(self, source: int, test: int):
+        self.source = source
+        self.test = test
+        self.tfd = 0.0  # % of test files that are committed before source files
+        self.tdd = 0.0  # % of times source and test files are committed close together
+        self.distances: list[float] = (
+            []
+        )  # distance between (close) source and test files
+
+    def get_stats(self) -> tuple[float, float]:
+        if len(self.distances) < 2:
+            return 0, 0  # not enough data
+        return statistics.mean(self.distances), statistics.stdev(self.distances)
+
+    def __str__(self) -> str:
+        mean, stdev = self.get_stats()
+        return (
+            f"({self.source},{self.test}) "
+            + f"#TFD: {round(self.tfd, 4)} #TDD: {round(self.tdd, 4)} "
+            + f"#DIST: {round(mean, 4)} #CONF: {round(stdev, 4)}"
+        )
+
+
+def my_spmf(
+    input_file: str, tfd_leniency: int, tdd_leniency: int
+) -> tuple[list[TDDInfo], TransactionMap]:
+    sequences, name_map, pairs = get_sequences(input_file)
+    spmf = []
+    for source, commit_info in sequences.items():
+        spmf.append(TDDInfo(source, test=pairs[source]))
+        parsed_commit_info = parse_commit_info(commit_info)
+        run_spmf(spmf[-1], parsed_commit_info, tfd_leniency, tdd_leniency)
+    return spmf, name_map
+
+
+def parse_commit_info(commit_info: str) -> list[tuple[int, int]]:
+    commit_info_arr = commit_info.split(" -1 ")[:-1]
+    commit_info_str = [commit.split(" ") for commit in commit_info_arr]
+    commit_info_int = [
+        (int(commit[0][1:-1]), int(commit[1])) for commit in commit_info_str
+    ]
+    return commit_info_int
+
+
+def run_spmf(
+    data: TDDInfo,
+    commit_info: list[tuple[int, int]],
+    tfd_leniency: int,
+    tdd_leniency: int,
+) -> None:
+    source_n = 0
+    test_n = 0
+    tests_before_source_started = 0
+    last_source = -1
+    last_test = -1
+    solo_commits = 0
+    possible_solo = False
+
+    for commit in commit_info:
+        if commit[1] == data.source:
+            source_n += 1
+            last_source = commit[0]
+        if commit[1] == data.test:
+            test_n += 1
+            last_test = commit[0]
+            if source_n <= tfd_leniency or (
+                source_n == tfd_leniency + 1 and last_source == last_test
+            ):
+                # committed before/with the first X source files
+                tests_before_source_started += 1
+
+        if last_source != -1 and last_test != -1:  # both created already
+            if abs(last_source - last_test) <= tdd_leniency:
+                # both files committed close together
+                data.distances.append(abs(last_source - last_test))
+                possible_solo = False
+            else:
+                if possible_solo:
+                    # files committed far apart
+                    solo_commits += 1
+                # last commit was far before this (by tdd_leniency)
+                # `-> if the *next* commit is also far away, this one must be solo
+                possible_solo = True
+    if possible_solo:
+        # account for final commit being far away from the last
+        solo_commits += 1
+
+    data.tfd = tests_before_source_started / test_n
+    data.tdd = 1 - (solo_commits / len(commit_info))

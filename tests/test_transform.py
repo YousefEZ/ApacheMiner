@@ -2,8 +2,8 @@ from pathlib import Path
 
 from src.transaction import (
     TransactionMap,
-    convert_for_spm,
     convert_into_transaction,
+    get_sequences,
     get_source_test_pairs,
 )
 
@@ -16,7 +16,7 @@ class TestTransform:
         # Run both transformations
         list_transactions = convert_into_transaction(self.input_file)
         list_map = list_transactions.maps
-        _, spm_map = convert_for_spm(self.input_file)
+        _, spm_map, _ = get_sequences(self.input_file)
 
         # Maps should contain same file mappings
         assert isinstance(list_map, TransactionMap) and isinstance(
@@ -35,7 +35,7 @@ class TestTransform:
 
     def test_map_format(self):
         """Verify that map files are formatted correctly"""
-        transactions, map = convert_for_spm(self.input_file)
+        _, map, _ = get_sequences(self.input_file)
         assert len(map.names) > 0, "Map file should not be empty"
         assert isinstance(
             map, TransactionMap
@@ -46,10 +46,10 @@ class TestTransform:
             for item in value:
                 assert isinstance(item, str), "Map value should be a list of strings"
 
-    def test_spm_output_format(self):
+    def test_sequence_output_format(self):
         """Verify that SPM output is formatted correctly"""
-        transactions, map = convert_for_spm(self.input_file)
-        for line in transactions:
+        transactions, _, _ = get_sequences(self.input_file)
+        for line in transactions.values():
             assert isinstance(line, str), "Transactions should be in string format"
             assert line.endswith("-2"), "Transactions should end with -2"
             line_split = line.split(" -1 ")
@@ -62,23 +62,18 @@ class TestTransform:
                 ), "Transaction item should be wrapped in angle brackets"
                 assert parts[1].isdigit(), "Transaction item should be numeric"
 
-    def test_spm_lines_match_pairs(self):
+    def test_sequence_lines_match_pairs(self):
         """Verify that SPM transactions contain correct source-test file pairs"""
-        transactions, map = convert_for_spm(self.input_file)
+        transactions, map, _ = get_sequences(self.input_file)
         pairs = get_source_test_pairs(map.names.items())
+        assert len(pairs) > 0, "Pairs should not be empty"
         for line in transactions:
             for source_idx in pairs:
-                print(
-                    source_idx,
-                    map.names[source_idx],
-                    pairs[source_idx],
-                    map.names[int(pairs[source_idx])],
-                )
                 if f" {source_idx} " in line:
                     assert (
-                        f" {pairs[source_idx]} " in line
+                        f" {pairs[source_idx]} -1" in line
                     ), "Source files should contain matching test file"
                 if f" {pairs[source_idx]} " in line:
                     assert (
-                        f" {source_idx} " in line
+                        f" {source_idx} -1" in line
                     ), "Test files should contain matching source file"
