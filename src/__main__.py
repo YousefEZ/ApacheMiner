@@ -3,13 +3,14 @@ import json
 import os
 import re
 from typing import Optional, ParamSpec
+import tempfile
 
 import click
 import rich.progress
 import rich.table
 import rich.theme
 
-from src.spmf.association import run_apriori
+from src.spmf.association import analyze_apriori, apriori
 
 from . import apache_list, driller, github, transaction
 from .driver import generate_driver
@@ -158,9 +159,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[task_id].description = (
-                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
-            )
+            progress.tasks[
+                task_id
+            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
@@ -190,7 +191,7 @@ def analyze(): ...
 @click.option("--display", "-d", "display", is_flag=True, default=False)
 @click.option("--limit", "-l", type=int, default=2)
 @click.option("--must-have", "-mh", type=str)
-@click.option("--dump-intermediary", "-di", type=click.Path())
+@click.option("--dump-output", "-do", "output_dir", type=click.Path())
 @click.option("--percentage", "-p", type=float, default=0.75)
 def association(
     transactions: str,
@@ -198,54 +199,34 @@ def association(
     display: bool,
     limit: int,
     must_have: str,
-    dump_intermediary: Optional[str],
+    output_dir: Optional[str],
     percentage: float,
 ) -> None:
-    run_apriori(transactions, "output.txt", percentage)
-    if dump_intermediary:
-        ensure_dir = os.path.dirname(dump_intermediary)
-        if not os.path.exists(ensure_dir):
-            os.makedirs(ensure_dir)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_file: str
 
-    with open(map_file, "r") as map_reader:
-        name_map = json.load(map_reader)
+        if output_dir:
+            ensure_dir = os.path.dirname(output_dir)
+            if not os.path.exists(ensure_dir):
+                os.makedirs(ensure_dir)
+            output_file = f"{output_dir}/output.txt"
+        else:
+            output_file = f"{temp_dir}/output.txt"
+        apriori(transactions, output_file, percentage)
+        results = analyze_apriori(output_file, map_file, limit, display, must_have)
 
-    associated_files = []
-    largest_associated = 1
-    with open("output.txt", "r") as reader:
-        while line := reader.readline():
-            raw_associated, strength = line.strip().split("#SUP:")
-            associated: list[str] = list(
-                map(
-                    lambda files: files[-1],
-                    map(name_map.get, raw_associated.strip().split(" ")),
+        if display:
+            table = rich.table.Table(title="Associated Files")
+            for i in range(results.largest_associated):
+                table.add_column(f"File {i+1}", justify="center")
+            for associated in results.associated_files:
+                table.add_row(
+                    *associated,
+                    *["-" for _ in range(results.largest_associated - len(associated))],
                 )
-            )
-            assert None not in associated
-            if (
-                2 <= len(associated) <= limit
-                and display
-                and (
-                    must_have is None
-                    or any(
-                        map(lambda name: must_have.lower() in name.lower(), associated)
-                    )
-                )
-            ):
-                associated_files.append(associated)
-                largest_associated = max(largest_associated, len(associated))
-
-    if display:
-        table = rich.table.Table(title="Associated Files")
-        for i in range(largest_associated):
-            table.add_column(f"File {i+1}", justify="center")
-        for associated in associated_files:
-            table.add_row(
-                *associated, *["-" for _ in range(largest_associated - len(associated))]
-            )
-        console.print(table)
-    else:
-        print(associated_files)
+            console.print(table)
+        else:
+            print(results.associated_files)
 
 
 cli.add_command(fetch)

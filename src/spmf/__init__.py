@@ -46,3 +46,11 @@ def check_spmf(function: Callable[P, None]) -> Callable[P, None]:
         return function(*args, **kwargs)
 
     return wrapper
+
+
+def run_spmf(algorithm: str, *args: str) -> bool:
+    process = os.system(f"java -jar .spmf/spmf.jar run {algorithm} {' '.join(args)}")
+    if process != 0:
+        console.print(f":x: {algorithm} [bold red]failed[/bold red]", emoji=True)
+        return False
+    return True
