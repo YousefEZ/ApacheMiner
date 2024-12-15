@@ -18,6 +18,46 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
     (item[1], item[0]) for item in list(modification_map.items())
 )
 
+class TwoWayDict(dict):
+    def __init__(self):
+        self.keys = dict()
+        self.values = dict()
+
+    def __setitem__(self, key, value):
+        if key in self:
+            del self[key]
+        if value in self:
+            del self[value]
+        self.keys.__setitem__(key, value)
+        self.values.__setitem__(value, key)
+
+    def __getitem__(self, x):
+        if x in self.keys:
+            return self.keys[x]
+        return self.values[x]
+
+    def get_keys(self):
+        return self.keys.keys()
+
+    def get_values(self):
+        return self.values.keys()
+
+    def __delitem__(self, x):
+        if x in self.keys:
+            self.values.__delitem__(self.keys[x])
+            self.keys.__delitem__(x)
+        elif x in self.values:
+            self.keys.__delitem__(self.values[x])
+            self.values.__delitem__(x)
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __str__(self):
+        return str(self.keys)
+
+    def __contains__(self, x):
+        return x in self.keys or x in self.values
 
 class TransactionMap(NamedTuple):
     ids: dict[str, int]
@@ -97,48 +137,6 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
 
 
 # CONVERT FOR SPM-FC-L #
-class TwoWayDict(dict):
-    def __init__(self, *args, **kwargs):
-        self.keys = dict()
-        self.values = dict()
-
-    def __setitem__(self, key, value):
-        if key in self:
-            del self[key]
-        if value in self:
-            del self[value]
-        self.keys.__setitem__(key, value)
-        self.values.__setitem__(value, key)
-
-    def __getitem__(self, x):
-        if x in self.keys:
-            return self.keys[x]
-        return self.values[x]
-
-    def get_keys(self):
-        return self.keys.keys()
-
-    def get_values(self):
-        return self.values.keys()
-
-    def __delitem__(self, x):
-        if x in self.keys:
-            self.values.__delitem__(self.keys[x])
-            self.keys.__delitem__(x)
-        elif x in self.values:
-            self.keys.__delitem__(self.values[x])
-            self.values.__delitem__(x)
-
-    def __len__(self):
-        return len(self.keys)
-
-    def __str__(self):
-        return str(self.keys)
-
-    def __contains__(self, x):
-        return x in self.keys or x in self.values
-
-
 def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> TwoWayDict:
     # TODO: Comprehensive (source, test) pairing - this is a temporary solution
     java_files = dict()
