@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
+from tqdm import tqdm
 
 import pydriller
 
@@ -158,7 +159,7 @@ def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> TwoWayD
     return pairs
 
 
-def get_sequences(in_file: str) -> tuple[dict[int, str], TransactionMap, TwoWayDict]:
+def get_sequences(in_file: str, show_progress: bool) -> tuple[dict[int, str], TransactionMap, TwoWayDict]:
     transactions = convert_into_transaction(in_file)
     name_map = transactions.maps.names
     map_items = name_map.items()
@@ -169,7 +170,7 @@ def get_sequences(in_file: str) -> tuple[dict[int, str], TransactionMap, TwoWayD
     for idx in pairs.get_keys():
         lines[idx] = ""
     # iterate over commits to fill in a line for each (source, test) pair
-    for commit_no, commit in enumerate(commits, start=1):
+    for commit_no, commit in wrap_iterable(enumerate(commits, start=1), show_progress):
         for file_idx in commit:
             if file_idx in lines:  # source file
                 lines[file_idx] += format_line(commit_no, file_idx)
@@ -185,6 +186,8 @@ def get_sequences(in_file: str) -> tuple[dict[int, str], TransactionMap, TwoWayD
 def format_line(commit_no: int, file_idx: int) -> str:
     return f"<{commit_no}> {file_idx} -1 "
 
+def wrap_iterable(iterable, show_progress: bool):
+    return tqdm(iterable) if show_progress else iterable
 
 # PROCESS LINE BY LINE FILE COMMITS #
 class TDDInfo:
@@ -212,14 +215,17 @@ class TDDInfo:
 
 
 def my_spmf(
-    input_file: str, tfd_leniency: int, tdd_leniency: int
+    input_file: str, tfd_leniency: int, tdd_leniency: int, show_progress: bool
 ) -> tuple[list[TDDInfo], TransactionMap]:
-    sequences, name_map, pairs = get_sequences(input_file)
+    if show_progress: print("Getting sequences of source and test files...")
+    sequences, name_map, pairs = get_sequences(input_file, show_progress)
     spmf = []
-    for source, commit_info in sequences.items():
+    if show_progress: print("Analyzing sequences for TFD and TDD...")
+    for source, commit_info in wrap_iterable(sequences.items(), show_progress):
         spmf.append(TDDInfo(source, test=pairs[source]))
         parsed_commit_info = parse_commit_info(commit_info)
         run_spmf(spmf[-1], parsed_commit_info, tfd_leniency, tdd_leniency)
+    if show_progress: print("Printing analysis to output file...")
     return spmf, name_map
 
 

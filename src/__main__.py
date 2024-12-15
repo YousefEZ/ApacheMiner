@@ -188,8 +188,14 @@ def transform_list(_input_file: str, output: str, map_file: str) -> None:
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-def transform_spmf(_input_file: str, output: str, map_file: str) -> None:
-    lines_commit, name_map, _ = transaction.get_sequences(_input_file)
+@click.option(
+    "--progress/--no-progress",
+    "show_progress",
+    default=False,
+    help="Show/hide progress bars",
+)
+def transform_spmf(_input_file: str, output: str, map_file: str, show_progress: bool) -> None:
+    lines_commit, name_map, _ = transaction.get_sequences(_input_file, show_progress)
     with open(output, "w") as writer:
         for line in lines_commit.values():
             writer.write(str(line) + "\n")
