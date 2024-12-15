@@ -1,12 +1,20 @@
 import csv
+import json
+import os
 import re
+from typing import Optional, ParamSpec
 
 import click
 import rich.progress
+import rich.table
 import rich.theme
+
+from src.spmf.association import run_apriori
 
 from . import apache_list, driller, github, transaction
 from .driver import generate_driver
+
+P = ParamSpec("P")
 
 HEADER = ["name", "repository"]
 
@@ -173,8 +181,7 @@ def transform_list(_input_file: str, output: str, map_file: str) -> None:
             writer.write(" ".join(map(str, changes)) + "\n")
 
     with open(map_file, "w") as map_writer:
-        for key, value in result.maps.names.items():
-            map_writer.write(f"{key}: {value}\n")
+        json.dump(result.maps.names, map_writer)
 
 
 @transform.command(name="sequence")
@@ -230,11 +237,78 @@ def transform_spmf(
 @cli.command()
 def analyze():
     print("Analyzing...")
+@click.group()
+def analyze(): ...
+
+
+@analyze.command()
+@click.option("--transactions", "-t", type=click.Path(), required=True)
+@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
+@click.option("--display", "-d", "display", is_flag=True, default=False)
+@click.option("--limit", "-l", type=int, default=2)
+@click.option("--must-have", "-mh", type=str)
+@click.option("--dump-intermediary", "-di", type=click.Path())
+@click.option("--percentage", "-p", type=float, default=0.75)
+def association(
+    transactions: str,
+    map_file: str,
+    display: bool,
+    limit: int,
+    must_have: str,
+    dump_intermediary: Optional[str],
+    percentage: float,
+) -> None:
+    run_apriori(transactions, "output.txt", percentage)
+    if dump_intermediary:
+        ensure_dir = os.path.dirname(dump_intermediary)
+        if not os.path.exists(ensure_dir):
+            os.makedirs(ensure_dir)
+
+    with open(map_file, "r") as map_reader:
+        name_map = json.load(map_reader)
+
+    associated_files = []
+    largest_associated = 1
+    with open("output.txt", "r") as reader:
+        while line := reader.readline():
+            raw_associated, strength = line.strip().split("#SUP:")
+            associated: list[str] = list(
+                map(
+                    lambda files: files[-1],
+                    map(name_map.get, raw_associated.strip().split(" ")),
+                )
+            )
+            assert None not in associated
+            if (
+                2 <= len(associated) <= limit
+                and display
+                and (
+                    must_have is None
+                    or any(
+                        map(lambda name: must_have.lower() in name.lower(), associated)
+                    )
+                )
+            ):
+                associated_files.append(associated)
+                largest_associated = max(largest_associated, len(associated))
+
+    if display:
+        table = rich.table.Table(title="Associated Files")
+        for i in range(largest_associated):
+            table.add_column(f"File {i+1}", justify="center")
+        for associated in associated_files:
+            table.add_row(
+                *associated, *["-" for _ in range(largest_associated - len(associated))]
+            )
+        console.print(table)
+    else:
+        print(associated_files)
 
 
 cli.add_command(fetch)
 cli.add_command(drill)
 cli.add_command(transform)
+cli.add_command(analyze)
 
 if __name__ == "__main__":
     cli()
