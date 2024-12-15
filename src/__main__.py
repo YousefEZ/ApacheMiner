@@ -184,11 +184,11 @@ def transform_list(_input_file: str, output: str, map_file: str) -> None:
         json.dump(result.maps.names, map_writer)
 
 
-@transform.command(name="sequence")
+@transform.command(name="spmf")
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-def transform_sequences(_input_file: str, output: str, map_file: str) -> None:
+def transform_spmf(_input_file: str, output: str, map_file: str) -> None:
     lines_commit, name_map, _ = transaction.get_sequences(_input_file)
     with open(output, "w") as writer:
         for line in lines_commit.values():
@@ -199,7 +199,10 @@ def transform_sequences(_input_file: str, output: str, map_file: str) -> None:
             map_writer.write(f"{key}: {value}\n")
 
 
-@transform.command(name="spmf")
+@click.group()
+def analyze(): ...
+
+@analyze.command(name="spmf")
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
@@ -221,10 +224,16 @@ def transform_sequences(_input_file: str, output: str, map_file: str) -> None:
     help="How far apart can source and test files be committed "
     + "while still considering them under TDD",
 )
-def transform_spmf(
-    _input_file: str, output: str, map_file: str, tfd: int, tdd: int
+@click.option(
+    "--progress/--no-progress",
+    "show_progress",
+    default=False,
+    help="Show/hide progress bars",
+)
+def analyze_my_spmf(
+    _input_file: str, output: str, map_file: str, tfd: int, tdd: int, show_progress: bool
 ) -> None:
-    lines_spmf, name_map = transaction.my_spmf(_input_file, tfd, tdd)
+    lines_spmf, name_map = transaction.my_spmf(_input_file, tfd, tdd, show_progress)
     with open(output, "w") as writer:
         for commit_info in lines_spmf:
             writer.write(str(commit_info) + "\n")
@@ -232,14 +241,6 @@ def transform_spmf(
     with open(map_file, "w") as map_writer:
         for key, value in name_map.names.items():
             map_writer.write(f"{key}: {value}\n")
-
-
-@cli.command()
-def analyze():
-    print("Analyzing...")
-@click.group()
-def analyze(): ...
-
 
 @analyze.command()
 @click.option("--transactions", "-t", type=click.Path(), required=True)
