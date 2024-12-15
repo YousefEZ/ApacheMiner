@@ -194,7 +194,9 @@ def transform_list(_input_file: str, output: str, map_file: str) -> None:
     default=False,
     help="Show/hide progress bars",
 )
-def transform_spmf(_input_file: str, output: str, map_file: str, show_progress: bool) -> None:
+def transform_spmf(
+    _input_file: str, output: str, map_file: str, show_progress: bool
+) -> None:
     lines_commit, name_map, _ = transaction.get_sequences(_input_file, show_progress)
     with open(output, "w") as writer:
         for line in lines_commit.values():
@@ -207,6 +209,7 @@ def transform_spmf(_input_file: str, output: str, map_file: str, show_progress: 
 
 @click.group()
 def analyze(): ...
+
 
 @analyze.command(name="spmf")
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
@@ -237,7 +240,12 @@ def analyze(): ...
     help="Show/hide progress bars",
 )
 def analyze_my_spmf(
-    _input_file: str, output: str, map_file: str, tfd: int, tdd: int, show_progress: bool
+    _input_file: str,
+    output: str,
+    map_file: str,
+    tfd: int,
+    tdd: int,
+    show_progress: bool,
 ) -> None:
     lines_spmf, name_map = transaction.my_spmf(_input_file, tfd, tdd, show_progress)
     with open(output, "w") as writer:
@@ -247,6 +255,7 @@ def analyze_my_spmf(
     with open(map_file, "w") as map_writer:
         for key, value in name_map.names.items():
             map_writer.write(f"{key}: {value}\n")
+
 
 @analyze.command()
 @click.option("--transactions", "-t", type=click.Path(), required=True)

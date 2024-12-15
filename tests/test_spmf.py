@@ -12,7 +12,7 @@ class TestSPMF:
 
     def test_spmf_output_format(self):
         """Verify that SPMF output is formatted correctly"""
-        spmf, _ = my_spmf(self.input_file, 1, 3)
+        spmf, _ = my_spmf(self.input_file, 1, 3, False)
         pattern = re.compile(
             r"\(\d+,\d+\) #TFD: \d*\.?\d+ #TDD: \d*\.?\d+ "
             + r"#DIST: \d*\.?\d+ #CONF: \d*\.?\d+"
@@ -26,8 +26,8 @@ class TestSPMF:
     def test_spmf_output_stats(self):
         """Verify that SPMF output statistics are within expected ranges"""
         tfd_leniency, tdd_leniency = 1, 3
-        spmf, _ = my_spmf(self.input_file, tfd_leniency, tdd_leniency)
-        sequence_lines = get_sequences(self.input_file)[0]
+        spmf, _ = my_spmf(self.input_file, tfd_leniency, tdd_leniency, False)
+        sequence_lines = get_sequences(self.input_file, False)[0]
         for datapoint in spmf:
             mean, stdev = datapoint.get_stats()
             assert 0 <= mean <= tdd_leniency, "Mean should be <= max TDD distance"
@@ -42,7 +42,7 @@ class TestSPMF:
 
     def test_spmf_lines_match_pairs(self):
         """Verify that SPMF output matches source-test pairs"""
-        spmf, map = my_spmf(self.input_file, 1, 3)
+        spmf, map = my_spmf(self.input_file, 1, 3, False)
         pairs = get_source_test_pairs(map.names.items())
         assert len(pairs) > 0, "Pairs should not be empty"
         for datapoint in spmf:
@@ -59,9 +59,9 @@ class TestSPMF:
 
     def test_spmf_intracommit_order_changes_nothing(self):
         """If the order of changes in a commit changes, the output should be the same"""
-        spmf1, _ = my_spmf(self.input_file, 1, 3)
+        spmf1, _ = my_spmf(self.input_file, 1, 3, False)
         # shuffle_hash_lines(self.input_file, self.shuffle_file)
-        spmf2, _ = my_spmf(self.shuffle_file, 1, 3)
+        spmf2, _ = my_spmf(self.shuffle_file, 1, 3, False)
         # compare numerically, regardless of order or mapping
         set1 = {(dp.tfd, dp.tdd, tuple(dp.distances)) for dp in spmf1}
         set2 = {(dp.tfd, dp.tdd, tuple(dp.distances)) for dp in spmf2}

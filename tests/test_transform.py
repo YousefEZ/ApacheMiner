@@ -16,7 +16,7 @@ class TestTransform:
         # Run both transformations
         list_transactions = convert_into_transaction(self.input_file)
         list_map = list_transactions.maps
-        _, spm_map, _ = get_sequences(self.input_file)
+        _, spm_map, _ = get_sequences(self.input_file, False)
 
         # Maps should contain same file mappings
         assert isinstance(list_map, TransactionMap) and isinstance(
@@ -35,7 +35,7 @@ class TestTransform:
 
     def test_map_format(self):
         """Verify that map files are formatted correctly"""
-        _, map, _ = get_sequences(self.input_file)
+        _, map, _ = get_sequences(self.input_file, False)
         assert len(map.names) > 0, "Map file should not be empty"
         assert isinstance(
             map, TransactionMap
@@ -48,7 +48,7 @@ class TestTransform:
 
     def test_sequence_output_format(self):
         """Verify that SPM output is formatted correctly"""
-        transactions, _, _ = get_sequences(self.input_file)
+        transactions, _, _ = get_sequences(self.input_file, False)
         for line in transactions.values():
             assert isinstance(line, str), "Transactions should be in string format"
             assert line.endswith("-2"), "Transactions should end with -2"
@@ -64,7 +64,7 @@ class TestTransform:
 
     def test_sequence_lines_match_pairs(self):
         """Verify that SPM transactions contain correct source-test file pairs"""
-        transactions, map, _ = get_sequences(self.input_file)
+        transactions, map, _ = get_sequences(self.input_file, False)
         pairs = get_source_test_pairs(map.names.items())
         assert len(pairs) > 0, "Pairs should not be empty"
         for line in transactions:
