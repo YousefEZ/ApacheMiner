@@ -23,7 +23,7 @@ def get_associated_files(
         name_map = json.load(map_reader)
 
     with open(file, "r") as reader:
-        for line in reader.readlines():
+        while line := reader.readline():
             raw_associated, _ = line.strip().split("#SUP:")
             associated = [
                 name_map[name][-1] for name in raw_associated.strip().split(" ")
