@@ -31,13 +31,11 @@ console = rich.console.Console(theme=theme)
 
 
 @click.group()
-def cli():
-    ...
+def cli(): ...
 
 
 @click.group()
-def fetch():
-    ...
+def fetch(): ...
 
 
 def print_if_not_silent(message: str, *, silent: bool = False):
@@ -126,8 +124,7 @@ def github_list(url: str, output: str):
 
 
 @click.group()
-def drill():
-    ...
+def drill(): ...
 
 
 @drill.command()
@@ -162,9 +159,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[
-                task_id
-            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            progress.tasks[task_id].description = (
+                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            )
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
@@ -185,8 +182,7 @@ def transform(_input_file: str, output: str, map_file: str) -> None:
 
 
 @click.group()
-def analyze():
-    ...
+def analyze(): ...
 
 
 @analyze.command()
@@ -216,7 +212,9 @@ def association(
             output_file = f"{output_dir}/output.txt"
         else:
             output_file = f"{temp_dir}/output.txt"
+        # storing it in file, so it doesn't have to be all in memory
         apriori(transactions, output_file, percentage)
+
         results = analyze_apriori(output_file, map_file, limit, must_have)
 
         if display:
