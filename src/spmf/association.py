@@ -3,7 +3,6 @@ from typing import Generator, NamedTuple, Optional
 
 from src.spmf import check_spmf, run_spmf
 
-
 ALGORITHM = "Apriori"
 
 

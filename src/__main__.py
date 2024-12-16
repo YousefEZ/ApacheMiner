@@ -2,8 +2,8 @@ import csv
 import json
 import os
 import re
-from typing import Optional, ParamSpec
 import tempfile
+from typing import Optional, ParamSpec
 
 import click
 import rich.progress
@@ -31,11 +31,13 @@ console = rich.console.Console(theme=theme)
 
 
 @click.group()
-def cli(): ...
+def cli():
+    ...
 
 
 @click.group()
-def fetch(): ...
+def fetch():
+    ...
 
 
 def print_if_not_silent(message: str, *, silent: bool = False):
@@ -124,7 +126,8 @@ def github_list(url: str, output: str):
 
 
 @click.group()
-def drill(): ...
+def drill():
+    ...
 
 
 @drill.command()
@@ -182,7 +185,8 @@ def transform(_input_file: str, output: str, map_file: str) -> None:
 
 
 @click.group()
-def analyze(): ...
+def analyze():
+    ...
 
 
 @analyze.command()
