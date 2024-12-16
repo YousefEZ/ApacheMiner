@@ -253,19 +253,29 @@ def run_analysis(
     last_source = -1
     last_test = -1
     solo_commits = 0
-    possible_solo = False
+    possible_solo = True
 
     for commit in commit_info:
         if commit[1] == data.source:
+            if tfd_leniency == -1 and last_source == -1 and last_test == commit[0]:
+                # if source & test created together, undo the special case
+                tests_before_source_started -= 1
+            if last_source != -1 and last_test == -1:
+                solo_commits += 1
             source_n += 1
             last_source = commit[0]
         if commit[1] == data.test:
+            if last_test != -1 and last_source == -1:
+                solo_commits += 1
             test_n += 1
             last_test = commit[0]
             if source_n <= tfd_leniency or (
                 source_n == tfd_leniency + 1 and last_source == last_test
             ):
                 # committed before/with the first X source files
+                tests_before_source_started += 1
+            if tfd_leniency == -1 and last_source == -1:
+                # special case of test before any source files
                 tests_before_source_started += 1
 
         if last_source != -1 and last_test != -1:  # both created already
@@ -275,11 +285,12 @@ def run_analysis(
                 possible_solo = False
             else:
                 if possible_solo:
-                    # files committed far apart
+                    # last commit was far away from the last
                     solo_commits += 1
                 # last commit was far before this (by tdd_leniency)
                 # `-> if the *next* commit is also far away, this one must be solo
                 possible_solo = True
+
     if possible_solo:
         # account for final commit being far away from the last
         solo_commits += 1
