@@ -2,13 +2,14 @@ import csv
 import itertools
 import operator
 import statistics
+from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import wraps
 from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
 
 import pydriller
-from tqdm import tqdm
+import rich.progress
 
 from .driller import modification_map
 
@@ -20,23 +21,20 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 )
 
 
-class TwoWayDict(dict):
+class TwoWayDict:
     def __init__(self):
         self.keys = dict()
         self.values = dict()
 
     def __setitem__(self, key, value):
-        if key in self:
-            del self[key]
-        if value in self:
-            del self[value]
-        self.keys.__setitem__(key, value)
-        self.values.__setitem__(value, key)
+        self.keys[key] = value
+        self.values[value] = key
 
     def __getitem__(self, x):
         if x in self.keys:
             return self.keys[x]
-        return self.values[x]
+        if x in self.values:
+            return self.values[x]
 
     def get_keys(self):
         return self.keys.keys()
@@ -46,11 +44,11 @@ class TwoWayDict(dict):
 
     def __delitem__(self, x):
         if x in self.keys:
-            self.values.__delitem__(self.keys[x])
-            self.keys.__delitem__(x)
-        elif x in self.values:
-            self.keys.__delitem__(self.values[x])
-            self.values.__delitem__(x)
+            del self.values[self.keys[x]]
+            del self.keys[x]
+        if x in self.values:
+            del self.keys[self.values[x]]
+            del self.values[x]
 
     def __len__(self):
         return len(self.keys)
@@ -115,14 +113,14 @@ def convert_into_transaction(reader: csv.DictReader) -> Transaction:
             elif modification_type == pydriller.ModificationType.DELETE:
                 id = change["file"].strip()
                 assert id in id_map
-                id_counter += 1
+                # id_counter += 1
                 idNum = id_map[id]
                 del id_map[id]
                 items.append(idNum)
             elif modification_type == pydriller.ModificationType.MODIFY:
                 id = change["file"].strip()
                 assert id in id_map
-                id_counter += 1
+                # id_counter += 1
                 idNum = id_map[id]
                 items.append(idNum)
             elif modification_type == pydriller.ModificationType.RENAME:
@@ -148,9 +146,8 @@ def get_source_test_pairs(all_files: Iterable[tuple[int, list[str]]]) -> TwoWayD
     for idx, fileArr in all_files:
         path = fileArr[0].split("/")
         filename = f"{path[0]}/{path[-1]}"
-        if filename.endswith(".java"):
-            if filename not in java_files:
-                java_files[filename] = idx
+        if filename.endswith(".java") and filename not in java_files:
+            java_files[filename] = idx
 
     for file in java_files:
         if file.endswith("Test.java"):
@@ -169,21 +166,17 @@ def get_sequences(
     map_items = name_map.items()
     commits = transactions.transactions
     pairs = get_source_test_pairs(map_items)
-    lines = dict()
-    # define various mappings for high speed lookup
-    for idx in pairs.get_keys():
-        lines[idx] = ""
+    lines: dict[int, str] = defaultdict(str)
+
     # iterate over commits to fill in a line for each (source, test) pair
     for commit_no, commit in wrap_iterable(enumerate(commits, start=1), show_progress):
         for file_idx in commit:
-            if file_idx in lines:  # source file
+            if file_idx in pairs.get_keys():  # source file
                 lines[file_idx] += format_line(commit_no, file_idx)
-            elif (
-                file_idx in pairs.get_values() and pairs[file_idx] in lines
-            ):  # test file
+            elif file_idx in pairs.get_values():  # test file
                 lines[pairs[file_idx]] += format_line(commit_no, file_idx)
-    for line in lines:
-        lines[line] = lines[line] + "-2"
+    for file_idx in lines:
+        lines[file_idx] = lines[file_idx] + "-2"
     return lines, transactions.maps, pairs
 
 
@@ -191,8 +184,8 @@ def format_line(commit_no: int, file_idx: int) -> str:
     return f"<{commit_no}> {file_idx} -1 "
 
 
-def wrap_iterable(iterable, show_progress: bool):
-    return tqdm(iterable) if show_progress else iterable
+def wrap_iterable(iterable: Iterable[T], show_progress: bool) -> Iterable[T]:
+    return rich.progress.track(iterable) if show_progress else iterable
 
 
 # PROCESS LINE BY LINE FILE COMMITS #
@@ -209,18 +202,22 @@ class TDDInfo:
     def get_stats(self) -> tuple[float, float]:
         if len(self.distances) < 2:
             return 0, 0  # not enough data
-        return statistics.mean(self.distances), statistics.stdev(self.distances)
+        mean = statistics.mean(self.distances)
+        confidence = 1 - (
+            statistics.stdev(self.distances) / (len(self.distances) ** 0.5)
+        )
+        return mean, confidence
 
     def __str__(self) -> str:
-        mean, stdev = self.get_stats()
+        mean, confidence = self.get_stats()
         return (
             f"({self.source},{self.test}) "
             + f"#TFD: {round(self.tfd, 4)} #TDD: {round(self.tdd, 4)} "
-            + f"#DIST: {round(mean, 4)} #CONF: {round(stdev, 4)}"
+            + f"#DIST: {round(mean, 4)} #CONF: {round(confidence, 4)}"
         )
 
 
-def my_spmf(
+def time_series_analysis(
     input_file: str, tfd_leniency: int, tdd_leniency: int, show_progress: bool
 ) -> tuple[list[TDDInfo], TransactionMap]:
     if show_progress:
@@ -232,7 +229,7 @@ def my_spmf(
     for source, commit_info in wrap_iterable(sequences.items(), show_progress):
         spmf.append(TDDInfo(source, test=pairs[source]))
         parsed_commit_info = parse_commit_info(commit_info)
-        run_spmf(spmf[-1], parsed_commit_info, tfd_leniency, tdd_leniency)
+        run_analysis(spmf[-1], parsed_commit_info, tfd_leniency, tdd_leniency)
     if show_progress:
         print("Printing analysis to output file...")
     return spmf, name_map
@@ -240,14 +237,11 @@ def my_spmf(
 
 def parse_commit_info(commit_info: str) -> list[tuple[int, int]]:
     commit_info_arr = commit_info.split(" -1 ")[:-1]
-    commit_info_str = [commit.split(" ") for commit in commit_info_arr]
-    commit_info_int = [
-        (int(commit[0][1:-1]), int(commit[1])) for commit in commit_info_str
-    ]
-    return commit_info_int
+    gen_into_string = (commit.split(" ") for commit in commit_info_arr)
+    return [(int(commit[0][1:-1]), int(commit[1])) for commit in gen_into_string]
 
 
-def run_spmf(
+def run_analysis(
     data: TDDInfo,
     commit_info: list[tuple[int, int]],
     tfd_leniency: int,

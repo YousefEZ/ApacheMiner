@@ -184,7 +184,7 @@ def transform_list(_input_file: str, output: str, map_file: str) -> None:
         json.dump(result.maps.names, map_writer)
 
 
-@transform.command(name="spmf")
+@transform.command(name="pair-grouped")
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
@@ -211,7 +211,7 @@ def transform_spmf(
 def analyze(): ...
 
 
-@analyze.command(name="spmf")
+@analyze.command(name="time-series")
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
@@ -239,7 +239,7 @@ def analyze(): ...
     default=False,
     help="Show/hide progress bars",
 )
-def analyze_my_spmf(
+def analyze_time_series(
     _input_file: str,
     output: str,
     map_file: str,
@@ -247,7 +247,9 @@ def analyze_my_spmf(
     tdd: int,
     show_progress: bool,
 ) -> None:
-    lines_spmf, name_map = transaction.my_spmf(_input_file, tfd, tdd, show_progress)
+    lines_spmf, name_map = transaction.time_series_analysis(
+        _input_file, tfd, tdd, show_progress
+    )
     with open(output, "w") as writer:
         for commit_info in lines_spmf:
             writer.write(str(commit_info) + "\n")

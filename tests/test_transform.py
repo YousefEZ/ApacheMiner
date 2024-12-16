@@ -67,13 +67,13 @@ class TestTransform:
         transactions, map, _ = get_sequences(self.input_file, False)
         pairs = get_source_test_pairs(map.names.items())
         assert len(pairs) > 0, "Pairs should not be empty"
-        for line in transactions:
-            for source_idx in pairs:
+        for line in transactions.values():
+            for source_idx in pairs.get_keys():
                 if f" {source_idx} " in line:
                     assert (
                         f" {pairs[source_idx]} -1" in line
                     ), "Source files should contain matching test file"
                 if f" {pairs[source_idx]} " in line:
                     assert (
-                        f" {source_idx} -1" in line
+                        f" {pairs[source_idx]} -1" in line
                     ), "Test files should contain matching source file"
