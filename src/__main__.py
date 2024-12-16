@@ -213,7 +213,7 @@ def association(
         else:
             output_file = f"{temp_dir}/output.txt"
         apriori(transactions, output_file, percentage)
-        results = analyze_apriori(output_file, map_file, limit, display, must_have)
+        results = analyze_apriori(output_file, map_file, limit, must_have)
 
         if display:
             table = rich.table.Table(title="Associated Files")
