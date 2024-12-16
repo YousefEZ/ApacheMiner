@@ -1,11 +1,12 @@
 import os
 from functools import wraps
-from typing import Callable, ParamSpec
+from typing import Callable, Optional, ParamSpec, TypeVar
 
 import requests
 from rich.console import Console
 
 P = ParamSpec("P")
+T = TypeVar("T")
 
 console = Console()
 
@@ -36,9 +37,9 @@ def ask_to_download_spmf() -> bool:
     return result.lower() == "y"
 
 
-def check_spmf(function: Callable[P, None]) -> Callable[P, None]:
+def check_spmf(function: Callable[P, T]) -> Callable[P, Optional[T]]:
     @wraps(function)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> None:
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> Optional[T]:
         if not is_spmf_installed():
             if not ask_to_download_spmf():
                 return None
