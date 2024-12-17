@@ -10,6 +10,7 @@ from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
 
 import pydriller
 import rich.progress
+import scipy.stats as stats
 
 from .driller import modification_map
 
@@ -200,12 +201,20 @@ class TDDInfo:
         )  # distance between (close) source and test files
 
     def get_stats(self) -> tuple[float, float]:
-        if len(self.distances) < 2:
-            return 0, 0  # not enough data
-        mean = statistics.mean(self.distances)
-        confidence = 1 - (
-            statistics.stdev(self.distances) / (len(self.distances) ** 0.5)
-        )
+        if len(self.distances) == 0:
+            return 0.0, 0.0
+        mean = sum(self.distances) / len(self.distances)
+        if len(self.distances) == 1:
+            return mean, 1.0
+        std_dev = statistics.stdev(self.distances)
+        if std_dev == 0:
+            return mean, 1.0
+        # normal distribution confidence of any TDD distance ~= mean
+        tolerance = 0.5  # to the closest integer
+        z_lower = (-tolerance * mean) / std_dev
+        z_upper = (tolerance * mean) / std_dev
+        confidence = stats.norm.cdf(z_upper) - stats.norm.cdf(z_lower)
+
         return mean, confidence
 
     def __str__(self) -> str:
