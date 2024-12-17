@@ -11,31 +11,31 @@ from src.transaction import (
 )
 
 
-class TestSPMF:
+class TestTimeSeriesAnalysis:
     input_file = Path.cwd() / "tests" / "data" / "commits.txt"
     shuffle_file = Path.cwd() / "tests" / "data" / "shuffled_commits.txt"
 
-    def test_spmf_output_format(self):
-        """Verify that SPMF output is formatted correctly"""
-        spmf, _ = time_series_analysis(self.input_file, 1, 3, False)
+    def test_output_format(self):
+        """Verify that series output is formatted correctly"""
+        series, _ = time_series_analysis(self.input_file, 1, 3, False)
         pattern = re.compile(
             r"\(\d+,\d+\) #TFD: \d*\.?\d+ #TDD: \d*\.?\d+ "
             + r"#DIST: \d*\.?\d+ #CONF: \d*\.?\d+"
         )
-        for line in spmf:
-            assert isinstance(line, TDDInfo), "SPMF output should be in TDDInfo"
+        for line in series:
+            assert isinstance(line, TDDInfo), "series output should be in TDDInfo"
             assert (
                 pattern.match(str(line)) is not None
-            ), "SPMF output should be formatted correctly"
+            ), "series output should be formatted correctly"
 
-    def test_spmf_output_stats(self):
-        """Verify that SPMF output statistics are within expected ranges"""
+    def test_output_stats(self):
+        """Verify that series output statistics are within expected ranges"""
         tfd_leniency, tdd_leniency = 1, 3
-        spmf, _ = time_series_analysis(
+        series, _ = time_series_analysis(
             self.input_file, tfd_leniency, tdd_leniency, False
         )
         sequence_lines = get_sequences(self.input_file, False)[0]
-        for datapoint in spmf:
+        for datapoint in series:
             mean, stdev = datapoint.get_stats()
             assert 0 <= mean <= tdd_leniency, "Mean should be <= max TDD distance"
             assert 0 <= datapoint.tfd <= 1, "TFD should be a ratio between 0 and 1"
@@ -47,12 +47,12 @@ class TestSPMF:
                 len(datapoint.distances) <= number_of_commits - 1
             ), "Number of TDD distances at most the total number of changes"
 
-    def test_spmf_lines_match_pairs(self):
-        """Verify that SPMF output matches source-test pairs"""
-        spmf, map = time_series_analysis(self.input_file, 1, 3, False)
+    def test_lines_match_pairs(self):
+        """Verify that series output matches source-test pairs"""
+        series, map = time_series_analysis(self.input_file, 1, 3, False)
         pairs = get_source_test_pairs(map.names.items())
         assert len(pairs) > 0, "Pairs should not be empty"
-        for datapoint in spmf:
+        for datapoint in series:
             assert (
                 datapoint.source in pairs
             ), "Source file should be in source-test pairs"
@@ -64,15 +64,17 @@ class TestSPMF:
                 pairs[datapoint.test] == datapoint.source
             ), "Source-test pairs should be symmetric"
 
-    def test_spmf_intracommit_order_changes_nothing(self):
+    def test_intracommit_order_changes_nothing(self):
         """If the order of changes in a commit changes, the output should be the same"""
-        spmf1, _ = time_series_analysis(self.input_file, 1, 3, False)
+        series1, _ = time_series_analysis(self.input_file, 1, 3, False)
         # shuffle_hash_lines(self.input_file, self.shuffle_file)
-        spmf2, _ = time_series_analysis(self.shuffle_file, 1, 3, False)
+        series2, _ = time_series_analysis(self.shuffle_file, 1, 3, False)
         # compare numerically, regardless of order or mapping
-        set1 = {(dp.tfd, dp.tdd, tuple(dp.distances)) for dp in spmf1}
-        set2 = {(dp.tfd, dp.tdd, tuple(dp.distances)) for dp in spmf2}
-        assert set1 == set2, "SPMF output should be the same regardless of commit order"
+        set1 = {(dp.tfd, dp.tdd, tuple(dp.distances)) for dp in series1}
+        set2 = {(dp.tfd, dp.tdd, tuple(dp.distances)) for dp in series2}
+        assert (
+            set1 == set2
+        ), "series output should be the same regardless of commit order"
 
 
 def shuffle_hash_lines(filename):
