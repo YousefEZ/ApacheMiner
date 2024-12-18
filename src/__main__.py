@@ -1,12 +1,21 @@
 import csv
+import json
+import os
 import re
+import tempfile
+from typing import Optional, ParamSpec
 
 import click
 import rich.progress
+import rich.table
 import rich.theme
+
+from src.spmf.association import analyze_apriori, apriori
 
 from . import apache_list, driller, github, transaction
 from .driver import generate_driver
+
+P = ParamSpec("P")
 
 HEADER = ["name", "repository"]
 
@@ -169,17 +178,62 @@ def transform(_input_file: str, output: str, map_file: str) -> None:
             writer.write(" ".join(map(str, changes)) + "\n")
 
     with open(map_file, "w") as map_writer:
-        for key, value in result.maps.names.items():
-            map_writer.write(f"{key}: {value}\n")
+        json.dump(result.maps.names, map_writer)
 
 
-@cli.command()
-def analyze():
-    print("Analyzing...")
+@click.group()
+def analyze(): ...
+
+
+@analyze.command()
+@click.option("--transactions", "-t", type=click.Path(), required=True)
+@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
+@click.option("--display", "-d", "display", is_flag=True, default=False)
+@click.option("--limit", "-l", type=int, default=2)
+@click.option("--must-have", "-mh", type=str)
+@click.option("--dump-output", "-do", "output_dir", type=click.Path())
+@click.option("--percentage", "-p", type=float, default=0.75)
+def association(
+    transactions: str,
+    map_file: str,
+    display: bool,
+    limit: int,
+    must_have: str,
+    output_dir: Optional[str],
+    percentage: float,
+) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_file: str
+
+        if output_dir:
+            ensure_dir = os.path.dirname(output_dir)
+            if not os.path.exists(ensure_dir):
+                os.makedirs(ensure_dir)
+            output_file = f"{output_dir}/output.txt"
+        else:
+            output_file = f"{temp_dir}/output.txt"
+        # storing it in file, so it doesn't have to be all in memory
+        apriori(transactions, output_file, percentage)
+
+        results = analyze_apriori(output_file, map_file, limit, must_have)
+
+        if display:
+            table = rich.table.Table(title="Associated Files")
+            for i in range(results.largest_associated):
+                table.add_column(f"File {i+1}", justify="center")
+            for associated in results.associated_files:
+                table.add_row(
+                    *associated,
+                    *["-" for _ in range(results.largest_associated - len(associated))],
+                )
+            console.print(table)
+        else:
+            print(results.associated_files)
 
 
 cli.add_command(fetch)
 cli.add_command(drill)
+cli.add_command(analyze)
 
 if __name__ == "__main__":
     cli()
