@@ -6,7 +6,8 @@ from src.binding.strategy import BindingStrategy
 
 
 class NameStrategy(BindingStrategy):
-    """This strategy of binding is based on the name of the java files, and the test class."""
+    """This strategy of binding is based on the name of the java files,
+    and the test class."""
 
     def __init__(
         self, source_files: set[SourceFile], test_files: set[TestFile]

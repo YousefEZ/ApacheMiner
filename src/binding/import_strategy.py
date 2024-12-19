@@ -20,12 +20,13 @@ class ImportStrategy(BindingStrategy):
 
     def import_name_of(self, java_file: JavaFile) -> str:
         directories = java_file.abs_path.split(os.path.sep)
-        for idx, subdirectory in enumerate(directories):
+        for idx, subdirectory in enumerate(directories, start=1):
             if subdirectory == "java":
                 break
         else:
             raise ValueError(f"Cannot find java directory in {java_file.abs_path}")
-        return ".".join(directories[idx + 1 :]).replace(".java", "")
+
+        return ".".join(directories[idx:]).replace(".java", "")
 
     @lru_cache
     def fetch_import_names(self, java_file: JavaFile) -> set[str]:
