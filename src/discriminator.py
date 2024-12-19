@@ -5,7 +5,8 @@ from typing import NewType, Optional
 
 import rich.progress
 
-from src.binder import FileName, Repository, SourceFile, SubProject, TestFile
+from src.binder import Repository, SubProject
+from src.binding.file_types import FileName, SourceFile, TestFile
 
 FileNumber = NewType("FileNumber", str)
 
@@ -38,11 +39,13 @@ class Transactions:
         for k, v in self.mapping.items():
             if file in v:
                 return k
+        return None
 
     def first_occurrence(self, file: FileNumber) -> Optional[Commit]:
         for commit in self.transactions:
             if file in commit.files:
                 return commit
+        return None
 
 
 @dataclass(frozen=True)
