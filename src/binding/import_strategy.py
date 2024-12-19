@@ -1,12 +1,12 @@
+import os
 from functools import lru_cache
 from typing import Optional
-import os
 
 import rich.progress
 
-from src.binding.strategy import BindingStrategy
+from src.binding.file_types import JavaFile, SourceFile, TestFile
 from src.binding.graph import Graph
-from src.binding.file_types import SourceFile, TestFile, JavaFile
+from src.binding.strategy import BindingStrategy
 
 
 class ImportStrategy(BindingStrategy):

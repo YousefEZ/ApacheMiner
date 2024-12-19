@@ -1,6 +1,6 @@
+import os
 from dataclasses import dataclass
 from typing import NewType
-import os
 
 FileName = NewType("FileName", str)
 

@@ -1,8 +1,7 @@
 from typing import Protocol
 
-
-from src.binding.graph import Graph
 from src.binding.file_types import SourceFile, TestFile
+from src.binding.graph import Graph
 
 
 class BindingStrategy(Protocol):

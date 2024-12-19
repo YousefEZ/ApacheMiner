@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from typing import Type
 import os
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Generator
+from typing import Generator, Type
 
-import rich.progress
 import matplotlib.pyplot as plt
 import networkx as nx
+import rich.progress
 
 from src.binding.file_types import SourceFile, TestFile
 from src.binding.graph import Graph
-from src.binding.strategy import BindingStrategy
 from src.binding.import_strategy import ImportStrategy
+from src.binding.strategy import BindingStrategy
 
 MAIN = "main"
 SOURCE_DIR = "src/main/java"

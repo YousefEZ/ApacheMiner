@@ -1,9 +1,8 @@
 from collections import defaultdict
 
-
-from src.binding.strategy import BindingStrategy
+from src.binding.file_types import FileName, SourceFile, TestFile
 from src.binding.graph import Graph
-from src.binding.file_types import SourceFile, TestFile, FileName
+from src.binding.strategy import BindingStrategy
 
 
 class NameStrategy(BindingStrategy):
