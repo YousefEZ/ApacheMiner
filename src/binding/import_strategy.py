@@ -48,6 +48,19 @@ class ImportStrategy(BindingStrategy):
                 links.add(source_file)
         return links
 
+    def graph(self) -> Graph:
+        links = {
+            test_file: self.fetch_links(test_file)
+            for test_file in rich.progress.track(
+                self._test_files, "Creating links for tests..."
+            )
+        }
+        return Graph(
+            source_files=self._source_files, test_files=self._test_files, links=links
+        )
+
+
+class RecursiveImportStrategy(ImportStrategy):
     def recursive_links(
         self, target: JavaFile, visited: Optional[set[SourceFile]] = None
     ) -> set[SourceFile]:
