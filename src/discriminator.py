@@ -133,12 +133,12 @@ class Discriminator:
 
 if __name__ == "__main__":
     repo = Repository(os.path.abspath("../zookeeper"))
-    subproject = next(iter(repo.subprojects))
-    logs = parse_file("transactions.txt")
-    mapping = get_mapping("mapping.json")
+    for subproject in repo.subprojects:
+        logs = parse_file("transactions.txt")
+        mapping = get_mapping("mapping.json")
 
-    transactions = Transactions(logs, mapping)
-    subproject_discriminator = SubProjectDiscriminator(transactions, subproject)
+        transactions = Transactions(logs, mapping)
+        subproject_discriminator = SubProjectDiscriminator(transactions, subproject)
 
-    print(f"Analyzing subproject: {subproject.path}")
-    print(subproject_discriminator.statistics.test_first_stats())
+        print(f"Analyzing subproject: {subproject.path}")
+        print(subproject_discriminator.statistics.test_first_stats())
