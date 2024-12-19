@@ -25,7 +25,7 @@ class JavaFile:
 
     @property
     def project_path(self) -> str:
-        directories = os.pathsep.split(self.path)
+        directories = self.abs_path.split(os.path.sep)
         for idx, subdirectory in enumerate(directories):
             if subdirectory == MAIN:
                 break
@@ -35,7 +35,7 @@ class JavaFile:
 
     @property
     def import_name(self) -> str:
-        directories = os.pathsep.split(self.abs_path)
+        directories = self.abs_path.split(os.path.sep)
         for idx, subdirectory in enumerate(directories):
             if subdirectory == "java":
                 break
