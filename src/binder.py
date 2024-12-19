@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Generator, Type
+from typing import Generator, Type, TypeVar
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import rich.progress
 
-from src.binding.file_types import SourceFile, TestFile
+from src.binding.file_types import JavaFile, SourceFile, TestFile
 from src.binding.graph import Graph
 from src.binding.import_strategy import ImportStrategy
 from src.binding.strategy import BindingStrategy
@@ -18,23 +18,24 @@ MAIN = "main"
 SOURCE_DIR = "src/main/java"
 TEST_DIR = "src/test/java"
 
+T = TypeVar("T", bound=JavaFile)
 
 console = rich.console.Console()
 
 
-def files_from_directory(directory: str) -> Generator[str, None, None]:
+def _all_files_in_directory(directory: str) -> Generator[str, None, None]:
     for root, dirnames, files in os.walk(directory):
         for dir in dirnames:
-            yield from files_from_directory(f"{root}/{dir}")
+            yield from _all_files_in_directory(f"{root}/{dir}")
         for file in files:
             if file.endswith(".java"):
                 yield root + os.path.sep + file
 
 
+@dataclass(frozen=True)
 class SubProject:
-    def __init__(self, path: str, strategy: Type[BindingStrategy]):
-        self.path = path
-        self.strategy = strategy
+    path: str
+    strategy: Type[BindingStrategy]
 
     @cached_property
     def graph(self) -> Graph:
@@ -46,26 +47,24 @@ class SubProject:
             os.path.exists(f"{path}/{sub_path}") for sub_path in (SOURCE_DIR, TEST_DIR)
         )
 
-    @cached_property
-    def tests(self) -> set[TestFile]:
+    def _fetch_files_from_directory(
+        self, file_type: Type[T], subdirectory: str
+    ) -> set[T]:
         return {
-            TestFile(
+            file_type(
                 project=self.path,
                 path=path.replace(f"{self.path}/", ""),
             )
-            for path in files_from_directory(f"{self.path}/{TEST_DIR}")
+            for path in _all_files_in_directory(f"{self.path}/{subdirectory}")
         }
 
     @cached_property
+    def tests(self) -> set[TestFile]:
+        return self._fetch_files_from_directory(TestFile, TEST_DIR)
+
+    @cached_property
     def source_files(self) -> set[SourceFile]:
-        files = {
-            SourceFile(
-                project=self.path,
-                path=path.replace(f"{self.path}/", ""),
-            )
-            for path in files_from_directory(f"{self.path}/{SOURCE_DIR}")
-        }
-        return files
+        return self._fetch_files_from_directory(SourceFile, SOURCE_DIR)
 
 
 @dataclass(frozen=True)
