@@ -71,9 +71,15 @@ class SubProjectStatistics:
             console.print("[red]=== TERMINUS ===[/red]\n\n")
 
     def test_first_stats(self) -> tuple[int, int]:
-        before = sum(len(statistic.before) for statistic in self.test_statistics)
-        after = sum(len(statistic.after) for statistic in self.test_statistics)
-        return before, after
+        test_first: set[SourceFile] = set()
+        test_after: set[SourceFile] = set()
+
+        for statistic in self.test_statistics:
+            test_after.update(statistic.after)
+            test_first.update(statistic.before)
+
+        actual_test_first = test_first - test_after
+        return len(actual_test_first), len(test_after)
 
 
 console = rich.console.Console()
