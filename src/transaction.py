@@ -1,94 +1,208 @@
-import csv
+from __future__ import annotations
+
 import itertools
+import json
 import operator
 from dataclasses import dataclass
-from functools import wraps
-from typing import Callable, Concatenate, NamedTuple, ParamSpec, TypeVar
+from functools import cached_property
+from typing import Callable, NewType, Optional, Self, TypedDict
 
 import pydriller
 
-from .driller import modification_map
+from src.binding.file_types import FileName
+from src.driller import modification_map
 
-P = ParamSpec("P")
-T = TypeVar("T")
+FileNumber = NewType("FileNumber", int)
 
 reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
     (item[1], item[0]) for item in list(modification_map.items())
 )
 
 
-class TransactionMap(NamedTuple):
-    ids: dict[str, int]
-    names: dict[int, list[str]]
+@dataclass(frozen=True)
+class Commit:
+    number: int
+    files: list[FileNumber]
+
+    def serialize(self) -> str:
+        return " ".join(map(str, self.files))
+
+    @classmethod
+    def deserialize(cls, number: int, text: str) -> Self:
+        return cls(number, [FileNumber(int(file)) for file in text.strip().split(" ")])
 
 
 @dataclass(frozen=True)
-class Transaction:
-    maps: TransactionMap
-    transactions: list[list[int]]
+class TransactionMap:
+    id_to_names: dict[FileNumber, list[FileName]]
+
+    @cached_property
+    def name_to_id(self) -> dict[FileName, FileNumber]:
+        return {
+            FileName(name): FileNumber(k)
+            for k, v in self.id_to_names.items()
+            for name in v
+        }
+
+    @classmethod
+    def deserialize(cls, text: str) -> Self:
+        data: dict[str, str] = json.loads(text)
+        return cls(
+            id_to_names={
+                FileNumber(int(k)): [FileName(name) for name in v]
+                for k, v in data.items()
+            }
+        )
+
+    def serialize(self) -> str:
+        return json.dumps(self.id_to_names, indent=2)
 
 
-def open_as_csv(
-    func: Callable[Concatenate[csv.DictReader, P], T],
-) -> Callable[Concatenate[str, P], T]:
-    @wraps(func)
-    def wrapper(filename: str, *args: P.args, **kwargs: P.kwargs) -> T:
-        with open(filename, "r") as file:
-            return func(csv.DictReader(file), *args, **kwargs)
+@dataclass(frozen=True)
+class Transactions:
+    commits: list[Commit]
 
-    return wrapper
+    @classmethod
+    def deserialize(cls, lines: str) -> Self:
+        return cls(
+            commits=[
+                Commit.deserialize(number, line)
+                for number, line in enumerate(lines.split("\n"))
+            ],
+        )
+
+    def serialize(self) -> str:
+        return "\n".join(" ".join(map(str, commit.files)) for commit in self.commits)
+
+    def first_occurrence(self, file_number: FileNumber) -> Optional[Commit]:
+        for commit in self.commits:
+            if file_number in commit.files:
+                return commit
+        return None
 
 
-@open_as_csv
-def convert_into_transaction(reader: csv.DictReader) -> Transaction:
-    lines = list(reader)
-    commits = itertools.groupby(lines, operator.itemgetter("hash"))
+class SerializedTransactionLog(TypedDict):
+    transactions: str
+    mapping: str
 
-    id_counter = 0
-    id_map = dict()
-    name_map = dict()
-    transactions = []
 
-    for _, commit in commits:
-        group = list(commit)
-        items = []
-        for change in group:
-            modification_type = pydriller.ModificationType(
-                reverse_modification_map[change["modification_type"]]
-            )
-            if (
-                modification_type == pydriller.ModificationType.ADD
-                or modification_type == pydriller.ModificationType.COPY
-            ):
-                id = change["file"].strip()
-                assert id not in id_map
-                id_counter += 1
-                name_map[id_counter] = [id]
-                id_map[id] = id_counter
-                idNum = id_counter
-                items.append(idNum)
-            elif modification_type == pydriller.ModificationType.DELETE:
-                id = change["file"].strip()
-                assert id in id_map
-                id_counter += 1
-                idNum = id_map[id]
-                del id_map[id]
-                items.append(idNum)
-            elif modification_type == pydriller.ModificationType.MODIFY:
-                id = change["file"].strip()
-                assert id in id_map
-                id_counter += 1
-                idNum = id_map[id]
-                items.append(idNum)
-            elif modification_type == pydriller.ModificationType.RENAME:
-                oldId, newId = change["file"].split("|")
-                assert oldId in id_map
-                assert newId not in id_map
-                idNum = id_map[oldId]
-                del id_map[oldId]
-                name_map[idNum].append(newId)
-                id_map[newId] = idNum
-                items.append(idNum)
+@dataclass(frozen=True)
+class TransactionLog:
+    transactions: Transactions
+    mapping: TransactionMap
 
-        transactions.append(sorted(items))
-    return Transaction(TransactionMap(id_map, name_map), transactions)
+    @classmethod
+    def deserialize(cls, text: str) -> Self:
+        data = json.loads(text)
+        return cls(
+            transactions=Transactions.deserialize(data["transactions"]),
+            mapping=TransactionMap.deserialize(data["mapping"]),
+        )
+
+    def serialize(self) -> str:
+        return json.dumps(
+            {
+                "transactions": self.transactions.serialize(),
+                "mapping": self.mapping.serialize(),
+            },
+            indent=2,
+        )
+
+    def filter_on(self, filterer: Callable[[FileName], bool]) -> TransactionLog:
+        """Removes anything that does pass the filterer, and creates a new
+        TransactionLog without these entries
+
+        Args:
+            filterer (Callable[[FileName], bool]): The filterer which takes
+            the file_name as an argument
+
+        Returns (TransactionLog): The new TransactionLog with the filtered
+            entries
+        """
+        removed_ids = {
+            id
+            for id, names in self.mapping.id_to_names.items()
+            if not filterer(names[-1])
+        }
+
+        mapping = {
+            id: names
+            for id, names in self.mapping.id_to_names.items()
+            if id not in removed_ids
+        }
+        commit_id = 0
+        commits: list[Commit] = []
+        for commit in self.transactions.commits:
+            new_files = [file for file in commit.files if file not in removed_ids]
+            if not new_files:
+                continue
+
+            commits.append(Commit(number=commit_id, files=new_files))
+            commit_id += 1
+        return TransactionLog(
+            transactions=Transactions(commits), mapping=TransactionMap(mapping)
+        )
+
+    @classmethod
+    def from_commit_data(cls, rows: list[dict[str, str]]) -> Self:
+        """Parses the rows of dict[col, val] to provide a TransactionLog
+
+        Args:
+            rows (list[dict[str, str]]): The rows of data to parse
+
+        Return TransactionLog: The parsed transaction log
+        """
+        commits = itertools.groupby(rows, operator.itemgetter("hash"))
+
+        id_counter: FileNumber = FileNumber(0)
+        id_map: dict[FileName, FileNumber] = dict()
+        name_map: dict[FileNumber, list[FileName]] = dict()
+        transactions: list[Commit] = []
+
+        for commit_number, commit in commits:
+            group: list[dict[str, str]] = list(commit)
+            items: list[FileNumber] = []
+            for change in group:
+                modification_type = reverse_modification_map[
+                    change["modification_type"]
+                ]
+
+                file_name: FileName = FileName(change["file"].strip())
+
+                if (
+                    modification_type == pydriller.ModificationType.ADD
+                    or modification_type == pydriller.ModificationType.COPY
+                ):
+                    assert file_name not in id_map
+                    id_counter = FileNumber(1 + id_counter)
+                    name_map[id_counter] = [file_name]
+                    id_map[file_name] = id_counter
+                    idNum = id_counter
+                    items.append(idNum)
+                elif modification_type == pydriller.ModificationType.DELETE:
+                    assert file_name in id_map
+                    id_counter = FileNumber(1 + id_counter)
+                    idNum = id_map[file_name]
+                    del id_map[file_name]
+                    items.append(idNum)
+                elif modification_type == pydriller.ModificationType.MODIFY:
+                    assert file_name in id_map
+                    id_counter = FileNumber(1 + id_counter)
+                    idNum = id_map[file_name]
+                    items.append(idNum)
+                elif modification_type == pydriller.ModificationType.RENAME:
+                    oldId, newId = map(FileName, change["file"].split("|"))
+                    assert oldId in id_map
+                    assert newId not in id_map
+                    idNum = id_map[oldId]
+                    del id_map[oldId]
+                    name_map[idNum].append(newId)
+                    id_map[newId] = idNum
+                    items.append(idNum)
+
+            transactions.append(Commit(number=commit_number, files=sorted(items)))
+
+        return cls(
+            transactions=Transactions(transactions),
+            mapping=TransactionMap(name_map),
+        )

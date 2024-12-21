@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import re
 import tempfile
@@ -172,13 +171,12 @@ def repositories(
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
 def transform(_input_file: str, output: str, map_file: str) -> None:
-    result = transaction.convert_into_transaction(_input_file)
-    with open(output, "w") as writer:
-        for changes in result.transactions:
-            writer.write(" ".join(map(str, changes)) + "\n")
-
-    with open(map_file, "w") as map_writer:
-        json.dump(result.maps.names, map_writer)
+    with open(_input_file, "r") as r, open(output, "w") as w, open(map_file, "w") as mw:
+        transaction_log = transaction.TransactionLog.from_commit_data(
+            list(csv.DictReader(r))
+        )
+        w.write(transaction_log.transactions.serialize())
+        mw.write(transaction_log.mapping.serialize())
 
 
 @click.group()
