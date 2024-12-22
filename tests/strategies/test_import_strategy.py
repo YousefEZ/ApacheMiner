@@ -71,9 +71,14 @@ def generate_test_file(name: str, source_code: list[str]) -> MockTestFile:
     )
 
 
-def test_small_import_strategy():
-    source_file = generate_source_file("a.java", [])
-    test_file = generate_test_file("Testa.java", generate_source_code([source_file]))
+def test_correct_import_name():
+    source_file = generate_source_file("A.java", [])
+    assert ImportStrategy.import_name_of(source_file) == "org.package.A"
+
+
+def test_single_import_strategy():
+    source_file = generate_source_file("A.java", [])
+    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
 
     repository = MockRepository(
         files={PROJECT_PATH: Files(source_files={source_file}, test_files={test_file})}
@@ -84,3 +89,89 @@ def test_small_import_strategy():
     assert graph.test_files == {test_file}
     assert graph.source_files == {source_file}
     assert graph.links == {test_file: {source_file}}
+
+
+def test_multiple_import():
+    source_file = generate_source_file("A.java", [])
+    source_file2 = generate_source_file("B.java", [])
+    test_file = generate_test_file(
+        "TestA.java", generate_source_code([source_file, source_file2])
+    )
+
+    repository = MockRepository(
+        files={
+            PROJECT_PATH: Files(
+                source_files={source_file, source_file2}, test_files={test_file}
+            )
+        }
+    )
+    binder = ImportStrategy(repository)
+
+    graph = binder.graph()
+    assert graph.test_files == {test_file}
+    assert graph.source_files == {source_file, source_file2}
+    assert graph.links == {test_file: {source_file, source_file2}}
+
+
+def test_single_import_multiple_source():
+    source_file = generate_source_file("A.java", [])
+    source_file2 = generate_source_file("B.java", [])
+    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
+
+    repository = MockRepository(
+        files={
+            PROJECT_PATH: Files(
+                source_files={source_file, source_file2}, test_files={test_file}
+            )
+        }
+    )
+    binder = ImportStrategy(repository)
+
+    graph = binder.graph()
+    assert graph.test_files == {test_file}
+    assert graph.source_files == {source_file, source_file2}
+    assert graph.links == {test_file: {source_file}}
+
+
+def test_single_import_multiple_test_single_source():
+    source_file = generate_source_file("A.java", [])
+    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
+    test_file2 = generate_test_file(
+        "TestAOther.java", generate_source_code([source_file])
+    )
+
+    repository = MockRepository(
+        files={
+            PROJECT_PATH: Files(
+                source_files={source_file}, test_files={test_file, test_file2}
+            )
+        }
+    )
+    binder = ImportStrategy(repository)
+
+    graph = binder.graph()
+    assert graph.test_files == {test_file, test_file2}
+    assert graph.source_files == {source_file}
+    assert graph.links == {test_file: {source_file}, test_file2: {source_file}}
+
+
+def test_single_import_multiple_test_multiple_source():
+    source_file = generate_source_file("A.java", [])
+    source_file2 = generate_source_file("B.java", [])
+    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
+    test_file2 = generate_test_file("TestB.java", generate_source_code([source_file2]))
+
+    repository = MockRepository(
+        files={
+            PROJECT_PATH: Files(
+                source_files={source_file, source_file2},
+                test_files={test_file, test_file2},
+            )
+        }
+    )
+    binder = ImportStrategy(repository)
+
+    graph = binder.graph()
+    assert graph.test_files == {test_file, test_file2}
+    assert graph.source_files == {source_file, source_file2}
+    assert graph.links == {test_file: {source_file}, test_file2: {source_file2}}
