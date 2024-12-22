@@ -3,9 +3,14 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import override
 
-from src.binding import file_types
-from src.binding.import_strategy import ImportStrategy
-from src.binding.repository import SOURCE_DIR, TEST_DIR, Files, Repository
+from src.discriminators.binding import file_types
+from src.discriminators.binding.import_strategy import ImportStrategy
+from src.discriminators.binding.repository import (
+    SOURCE_DIR,
+    TEST_DIR,
+    Files,
+    Repository,
+)
 
 PROJECT_PATH = "/home/"
 SOURCE_PATH = os.path.join("/home/", SOURCE_DIR, "org/package/")

@@ -5,10 +5,10 @@ from typing import Protocol
 
 import rich.progress
 
-from src.binding.file_types import FileName, SourceFile, TestFile
-from src.binding.import_strategy import ImportStrategy
-from src.binding.repository import JavaRepository
-from src.binding.strategy import BindingStrategy
+from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
+from src.discriminators.binding.import_strategy import ImportStrategy
+from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.binding.strategy import BindingStrategy
 from src.transaction import TransactionLog, TransactionMap, Transactions
 
 console = rich.console.Console()

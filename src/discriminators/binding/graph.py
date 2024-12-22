@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src.binding.file_types import SourceFile, TestFile
+from .file_types import SourceFile, TestFile
 
 
 @dataclass(frozen=True)
