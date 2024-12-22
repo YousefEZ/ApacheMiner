@@ -1,24 +1,34 @@
 from collections import defaultdict
+from dataclasses import dataclass
+from functools import cached_property
 
+from src.binding._repository import JavaRepository
 from src.binding.file_types import FileName, SourceFile, TestFile
 from src.binding.graph import Graph
 from src.binding.strategy import BindingStrategy
 
 
+@dataclass(frozen=True)
 class NameStrategy(BindingStrategy):
     """This strategy of binding is based on the name of the java files,
     and the test class."""
 
-    def __init__(
-        self, source_files: set[SourceFile], test_files: set[TestFile]
-    ) -> None:
-        self._source_files = source_files
-        self._test_files = test_files
+    path: str
 
-    def graph(self) -> Graph:
-        base_names_tests = {test_file.name: test_file for test_file in self._test_files}
+    @cached_property
+    def repository(self) -> JavaRepository:
+        return JavaRepository(self.path)
+
+    def _graph_generator(self) -> Graph:
+        base_names_tests = {
+            test_file.name: test_file
+            for files in self.repository.files.values()
+            for test_file in files.test_files
+        }
         base_names_source = {
-            source_file.name: source_file for source_file in self._source_files
+            source_file.name: source_file
+            for files in self.repository.files.values()
+            for source_file in files.source_files
         }
 
         links: dict[TestFile, set[SourceFile]] = defaultdict(set)
@@ -30,5 +40,7 @@ class NameStrategy(BindingStrategy):
                 )
 
         return Graph(
-            source_files=self._source_files, test_files=self._test_files, links=links
+            source_files=set(base_names_source.values()),
+            test_files=set(base_names_tests.values()),
+            links=links,
         )
