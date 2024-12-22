@@ -5,7 +5,7 @@ from typing import Protocol
 
 import rich.progress
 
-from src.binding._repository import JavaRepository
+from src.binding.repository import JavaRepository
 from src.binding.file_types import FileName, SourceFile, TestFile
 from src.binding.import_strategy import ImportStrategy
 from src.binding.strategy import BindingStrategy

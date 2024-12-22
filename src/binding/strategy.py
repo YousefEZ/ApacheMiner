@@ -1,6 +1,6 @@
 from typing import Protocol
 
-from src.binding._repository import Repository
+from src.binding.repository import Repository
 from src.binding.graph import Graph
 
 

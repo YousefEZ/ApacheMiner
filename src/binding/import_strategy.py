@@ -5,7 +5,7 @@ from typing import Generator, Optional, override
 
 import rich.progress
 
-from src.binding._repository import Repository
+from src.binding.repository import Repository
 from src.binding.file_types import ProgramFile, SourceFile
 from src.binding.graph import Graph
 from src.binding.strategy import BindingStrategy
