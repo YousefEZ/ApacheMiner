@@ -3,9 +3,9 @@ import os.path
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from src.binding.import_strategy import ImportStrategy
-from src.binding.repository import JavaRepository
-from src.binding.strategy import BindingStrategy
+from .discriminators.binding.import_strategy import ImportStrategy
+from .discriminators.binding.repository import JavaRepository
+from .discriminators.binding.strategy import BindingStrategy
 
 
 def visualize_project(binder: BindingStrategy):
