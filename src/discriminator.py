@@ -5,8 +5,9 @@ from typing import Protocol
 
 import rich.progress
 
-from src.binder import Repository, SubProject
 from src.binding.file_types import FileName, SourceFile, TestFile
+from src.binding.import_strategy import ImportStrategy
+from src.binding.strategy import BindingStrategy
 from src.transaction import TransactionLog, TransactionMap, Transactions
 
 console = rich.console.Console()
@@ -18,9 +19,9 @@ class Statistics(Protocol):
 
 class Discriminator(Protocol):
     transaction: TransactionLog
-    subproject: SubProject
+    file_binder: BindingStrategy
 
-    def __init__(self, transactions: Transactions, subproject: SubProject): ...
+    def __init__(self, transactions: Transactions, file_binder: BindingStrategy): ...
 
     @property
     def statistics(self) -> Statistics: ...
@@ -56,16 +57,14 @@ class BeforeAfterStatistics(Statistics):
 @dataclass(frozen=True)
 class BeforeAfterDiscriminator(Discriminator):
     transaction: TransactionLog
-    subproject: SubProject
+    file_binder: BindingStrategy
 
     @property
     def statistics(self) -> BeforeAfterStatistics:
         output = []
-        graph = self.subproject.graph
-        for test in rich.progress.track(self.subproject.tests):
-            path = FileName(
-                os.path.join(os.path.basename(self.subproject.path), test.path)
-            )
+        graph = self.file_binder.graph()
+        for test in rich.progress.track(graph.test_files):
+            path = FileName(os.path.join(os.path.basename(test.project), test.path))
             file_number = self.transaction.mapping.name_to_id[path]
             base_commit = self.transaction.transactions.first_occurrence(file_number)
             assert base_commit is not None, f"File not found {test.name} @ {path}"
@@ -74,7 +73,7 @@ class BeforeAfterDiscriminator(Discriminator):
             for source_file in graph.links[test]:
                 path = FileName(
                     os.path.join(
-                        os.path.basename(self.subproject.path), source_file.path
+                        os.path.basename(source_file.project), source_file.path
                     )
                 )
                 file_number = self.transaction.mapping.name_to_id[path]
@@ -93,14 +92,13 @@ class BeforeAfterDiscriminator(Discriminator):
 
 
 if __name__ == "__main__":
-    repo = Repository(os.path.abspath("../zookeeper"))
-    for subproject in repo.subprojects:
-        with open("transactions.txt") as t, open("mapping.json") as m:
-            logs = Transactions.deserialize(t.read())
-            mapping = TransactionMap.deserialize(m.read())
+    with open("transactions.txt") as t, open("mapping.json") as m:
+        logs = Transactions.deserialize(t.read())
+        mapping = TransactionMap.deserialize(m.read())
 
-        transactions = TransactionLog(logs, mapping)
-        subproject_discriminator = BeforeAfterDiscriminator(transactions, subproject)
+    transactions = TransactionLog(logs, mapping)
+    discriminator = BeforeAfterDiscriminator(
+        transactions, ImportStrategy(os.path.abspath("../zookeeper"))
+    )
 
-        print(f"Analyzing subproject: {subproject.path}")
-        print(subproject_discriminator.statistics.output())
+    print(discriminator.statistics.output())
