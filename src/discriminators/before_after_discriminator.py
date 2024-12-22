@@ -4,12 +4,13 @@ from functools import cached_property
 
 import rich.progress
 
-from .discriminator import Discriminator, Statistics
 from src.transaction import TransactionLog, TransactionMap, Transactions
+
+from .binding.file_types import FileName, SourceFile, TestFile
 from .binding.import_strategy import ImportStrategy
 from .binding.repository import JavaRepository
-from .binding.file_types import FileName, SourceFile, TestFile
 from .binding.strategy import BindingStrategy
+from .discriminator import Discriminator, Statistics
 
 console = rich.console.Console()
 
