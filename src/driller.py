@@ -8,13 +8,7 @@ import rich.progress
 from bs4 import BeautifulSoup
 from urllib3 import request
 
-modification_map: dict[pydriller.ModificationType, str] = {
-    pydriller.ModificationType.ADD: "A",
-    pydriller.ModificationType.COPY: "C",
-    pydriller.ModificationType.DELETE: "D",
-    pydriller.ModificationType.MODIFY: "M",
-    pydriller.ModificationType.RENAME: "R",
-}
+from .discriminators.transaction import modification_map
 
 
 def fetch_number_of_commits(url: str) -> Optional[int]:

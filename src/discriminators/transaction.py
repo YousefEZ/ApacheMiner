@@ -9,10 +9,18 @@ from typing import Callable, NewType, Optional, Self, TypedDict
 
 import pydriller
 
-from src.binding.file_types import FileName
-from src.driller import modification_map
+from .binding.file_types import FileName
 
 FileNumber = NewType("FileNumber", int)
+
+modification_map: dict[pydriller.ModificationType, str] = {
+    pydriller.ModificationType.ADD: "A",
+    pydriller.ModificationType.COPY: "C",
+    pydriller.ModificationType.DELETE: "D",
+    pydriller.ModificationType.MODIFY: "M",
+    pydriller.ModificationType.RENAME: "R",
+}
+
 
 reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
     (item[1], item[0]) for item in list(modification_map.items())
