@@ -17,7 +17,8 @@ class ImportStrategy(BindingStrategy):
 
     repository: Repository
 
-    def import_name_of(self, java_file: ProgramFile) -> str:
+    @staticmethod
+    def import_name_of(java_file: ProgramFile) -> str:
         directories = java_file.abs_path.split(os.path.sep)
         for idx, subdirectory in enumerate(directories, start=1):
             if subdirectory == "java":
