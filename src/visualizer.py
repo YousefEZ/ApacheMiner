@@ -3,8 +3,8 @@ import os.path
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from src.binding.repository import JavaRepository
 from src.binding.import_strategy import ImportStrategy
+from src.binding.repository import JavaRepository
 from src.binding.strategy import BindingStrategy
 
 

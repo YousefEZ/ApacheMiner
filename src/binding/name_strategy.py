@@ -1,9 +1,9 @@
 from collections import defaultdict
 from dataclasses import dataclass
 
-from src.binding.repository import Repository
 from src.binding.file_types import FileName, SourceFile, TestFile
 from src.binding.graph import Graph
+from src.binding.repository import Repository
 from src.binding.strategy import BindingStrategy
 
 
