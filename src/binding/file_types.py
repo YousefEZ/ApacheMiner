@@ -17,6 +17,10 @@ class ProgramFile:
     def name(self) -> FileName:
         return FileName(os.path.basename(self.path))
 
+    def get_source_code(self) -> list[str]:
+        with open(self.abs_path, "r") as file:
+            return file.readlines()
+
     @property
     def abs_path(self) -> str:
         return self.project + "/" + self.path

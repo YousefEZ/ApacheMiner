@@ -29,14 +29,13 @@ class ImportStrategy(BindingStrategy):
 
     @lru_cache
     def fetch_import_names(self, java_file: ProgramFile) -> set[str]:
-        with open(java_file.abs_path, "r") as file:
-            imports: set[str] = set()
-            while line := file.readline():
-                if line.startswith("import"):
-                    imports.add(line.replace("import ", "").replace(";", "").strip())
-                elif "class" in line:
-                    break
-            return imports
+        imports: set[str] = set()
+        for line in java_file.get_source_code():
+            if line.startswith("import"):
+                imports.add(line.replace("import ", "").replace(";", "").strip())
+            elif "class" in line:
+                break
+        return imports
 
     @lru_cache
     def fetch_links(self, java_file: ProgramFile) -> set[SourceFile]:
