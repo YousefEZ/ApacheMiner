@@ -1,10 +1,10 @@
-from src.binding.strategy import BindingStrategy
-from src.binding.import_strategy import ImportStrategy
-
 import os.path
 
-import networkx as nx
 import matplotlib.pyplot as plt
+import networkx as nx
+
+from src.binding.import_strategy import ImportStrategy
+from src.binding.strategy import BindingStrategy
 
 
 def visualize_project(binder: BindingStrategy):

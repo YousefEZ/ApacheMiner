@@ -5,9 +5,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Generator, NamedTuple, Type, TypeVar
 
-
 from src.binding.file_types import JavaFile, SourceFile, TestFile
-
 
 MAIN = "main"
 SOURCE_DIR = "src/main/java"
