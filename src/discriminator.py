@@ -51,7 +51,10 @@ class BeforeAfterStatistics(Statistics):
         return self.aggregate_before - self.aggregate_after
 
     def output(self) -> str:
-        return f"Test First: {len(self.test_first)}\nTest After: {len(self.aggregate_after)}"
+        return (
+            f"Test First: {len(self.test_first)}\n"
+            + f"Test After: {len(self.aggregate_after)}"
+        )
 
 
 @dataclass(frozen=True)
