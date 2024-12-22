@@ -27,7 +27,7 @@ class Files(NamedTuple):
 def _all_files_in_directory(directory: str) -> Generator[str, None, None]:
     for root, dirnames, files in os.walk(directory):
         for dir in dirnames:
-            yield from _all_files_in_directory(f"{root}/{dir}")
+            yield from _all_files_in_directory(os.path.join(root, dir))
         for file in files:
             if file.endswith(".java"):
                 yield root + os.path.sep + file
@@ -40,7 +40,8 @@ class JavaSubProject:
     @staticmethod
     def is_project(path: str) -> bool:
         return all(
-            os.path.exists(f"{path}/{sub_path}") for sub_path in (SOURCE_DIR, TEST_DIR)
+            os.path.exists(os.path.join(path, sub_path))
+            for sub_path in (SOURCE_DIR, TEST_DIR)
         )
 
     def _fetch_files_from_directory(
@@ -51,7 +52,7 @@ class JavaSubProject:
                 project=self.path,
                 path=path.replace(f"{self.path}/", ""),
             )
-            for path in _all_files_in_directory(f"{self.path}/{subdirectory}")
+            for path in _all_files_in_directory(os.path.join(self.path, subdirectory))
         }
 
     @cached_property
@@ -70,9 +71,9 @@ class JavaRepository(Repository):
     @cached_property
     def subprojects(self) -> set[JavaSubProject]:
         return {
-            JavaSubProject(f"{self.root}/{path}")
+            JavaSubProject(os.path.join(self.root, path))
             for path in os.listdir(self.root)
-            if JavaSubProject.is_project(f"{self.root}/{path}")
+            if JavaSubProject.is_project(os.path.join(self.root, path))
         }
 
     @cached_property

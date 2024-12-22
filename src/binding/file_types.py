@@ -10,9 +10,6 @@ class ProgramFile:
     project: str  # abs to repo/project
     path: str  # relative to project
 
-    def __repr__(self) -> str:
-        return self.name
-
     @property
     def name(self) -> FileName:
         return FileName(os.path.basename(self.path))
@@ -23,7 +20,7 @@ class ProgramFile:
 
     @property
     def abs_path(self) -> str:
-        return self.project + "/" + self.path
+        return os.path.join(self.project, self.path)
 
     def __hash__(self) -> int:
         return hash(self.abs_path)
@@ -38,8 +35,10 @@ class ProgramFile:
 
 
 @dataclass(frozen=True)
-class SourceFile(ProgramFile): ...
+class SourceFile(ProgramFile):
+    pass
 
 
 @dataclass(frozen=True)
-class TestFile(ProgramFile): ...
+class TestFile(ProgramFile):
+    pass

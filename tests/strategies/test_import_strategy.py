@@ -1,3 +1,4 @@
+import os.path
 from dataclasses import dataclass
 from functools import cached_property
 from typing import override
@@ -7,8 +8,8 @@ from src.binding.import_strategy import ImportStrategy
 from src.binding.repository import SOURCE_DIR, TEST_DIR, Files, Repository
 
 PROJECT_PATH = "/home/"
-SOURCE_PATH = "/home/" + SOURCE_DIR + "/org/package/"
-TEST_PATH = "/home/" + TEST_DIR + "/org/package/"
+SOURCE_PATH = os.path.join("/home/", SOURCE_DIR, "org/package/")
+TEST_PATH = os.path.join("/home/", TEST_DIR, "org/package/")
 
 
 class MockRepository(Repository):
