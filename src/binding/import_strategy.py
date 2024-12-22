@@ -1,12 +1,12 @@
 import os
 from dataclasses import dataclass
-from functools import cached_property, lru_cache
+from functools import lru_cache
 from typing import Generator, Optional, override
 
 import rich.progress
 
-from src.binding._repository import JavaRepository
-from src.binding.file_types import JavaFile, SourceFile
+from src.binding._repository import Repository
+from src.binding.file_types import ProgramFile, SourceFile
 from src.binding.graph import Graph
 from src.binding.strategy import BindingStrategy
 
@@ -15,13 +15,9 @@ from src.binding.strategy import BindingStrategy
 class ImportStrategy(BindingStrategy):
     """This strategy of binding is based on the import statements in the java files."""
 
-    path: str
+    repository: Repository
 
-    @cached_property
-    def repository(self) -> JavaRepository:
-        return JavaRepository(self.path)
-
-    def import_name_of(self, java_file: JavaFile) -> str:
+    def import_name_of(self, java_file: ProgramFile) -> str:
         directories = java_file.abs_path.split(os.path.sep)
         for idx, subdirectory in enumerate(directories, start=1):
             if subdirectory == "java":
@@ -32,7 +28,7 @@ class ImportStrategy(BindingStrategy):
         return ".".join(directories[idx:]).replace(".java", "")
 
     @lru_cache
-    def fetch_import_names(self, java_file: JavaFile) -> set[str]:
+    def fetch_import_names(self, java_file: ProgramFile) -> set[str]:
         with open(java_file.abs_path, "r") as file:
             imports: set[str] = set()
             while line := file.readline():
@@ -43,7 +39,7 @@ class ImportStrategy(BindingStrategy):
             return imports
 
     @lru_cache
-    def fetch_links(self, java_file: JavaFile) -> set[SourceFile]:
+    def fetch_links(self, java_file: ProgramFile) -> set[SourceFile]:
         links: set[SourceFile] = set()
         for source_file in self.repository.files[java_file.project].source_files:
             if self.import_name_of(source_file) in self.fetch_import_names(java_file):
@@ -74,11 +70,11 @@ class ImportStrategy(BindingStrategy):
 class RecursiveImportStrategy(ImportStrategy):
     @override
     @lru_cache
-    def fetch_links(self, java_file: JavaFile) -> set[SourceFile]:
+    def fetch_links(self, java_file: ProgramFile) -> set[SourceFile]:
         return self.recursive_links(java_file)
 
     def recursive_links(
-        self, target: JavaFile, visited: Optional[set[SourceFile]] = None
+        self, target: ProgramFile, visited: Optional[set[SourceFile]] = None
     ) -> set[SourceFile]:
         if visited is None:
             visited = set()

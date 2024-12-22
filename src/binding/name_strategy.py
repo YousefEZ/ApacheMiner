@@ -1,8 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import cached_property
 
-from src.binding._repository import JavaRepository
+from src.binding._repository import Repository
 from src.binding.file_types import FileName, SourceFile, TestFile
 from src.binding.graph import Graph
 from src.binding.strategy import BindingStrategy
@@ -13,11 +12,7 @@ class NameStrategy(BindingStrategy):
     """This strategy of binding is based on the name of the java files,
     and the test class."""
 
-    path: str
-
-    @cached_property
-    def repository(self) -> JavaRepository:
-        return JavaRepository(self.path)
+    repository: Repository
 
     def _graph_generator(self) -> Graph:
         base_names_tests = {

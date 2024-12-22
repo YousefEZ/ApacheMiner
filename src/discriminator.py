@@ -5,6 +5,7 @@ from typing import Protocol
 
 import rich.progress
 
+from src.binding._repository import JavaRepository
 from src.binding.file_types import FileName, SourceFile, TestFile
 from src.binding.import_strategy import ImportStrategy
 from src.binding.strategy import BindingStrategy
@@ -101,7 +102,7 @@ if __name__ == "__main__":
 
     transactions = TransactionLog(logs, mapping)
     discriminator = BeforeAfterDiscriminator(
-        transactions, ImportStrategy(os.path.abspath("../zookeeper"))
+        transactions, ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
     )
 
     print(discriminator.statistics.output())

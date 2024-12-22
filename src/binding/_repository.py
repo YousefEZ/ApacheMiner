@@ -3,15 +3,20 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Generator, NamedTuple, Type, TypeVar
+from typing import Generator, NamedTuple, Protocol, Type, TypeVar
 
-from src.binding.file_types import JavaFile, SourceFile, TestFile
+from src.binding.file_types import ProgramFile, SourceFile, TestFile
 
 MAIN = "main"
 SOURCE_DIR = "src/main/java"
 TEST_DIR = "src/test/java"
 
-T = TypeVar("T", bound=JavaFile)
+T = TypeVar("T", bound=ProgramFile)
+
+
+class Repository(Protocol):
+    @cached_property
+    def files(self) -> dict[str, Files]: ...
 
 
 class Files(NamedTuple):
@@ -59,7 +64,7 @@ class JavaSubProject:
 
 
 @dataclass(frozen=True)
-class JavaRepository:
+class JavaRepository(Repository):
     root: str
 
     @cached_property

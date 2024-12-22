@@ -3,6 +3,7 @@ import os.path
 import matplotlib.pyplot as plt
 import networkx as nx
 
+from src.binding._repository import JavaRepository
 from src.binding.import_strategy import ImportStrategy
 from src.binding.strategy import BindingStrategy
 
@@ -48,5 +49,5 @@ def visualize_project(binder: BindingStrategy):
 
 if __name__ == "__main__":
     path = os.path.abspath(input("Enter the path to the project: "))
-    binder = ImportStrategy(path)
+    binder = ImportStrategy(JavaRepository(path))
     visualize_project(binder)
