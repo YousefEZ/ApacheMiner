@@ -8,7 +8,7 @@ import rich.progress
 from bs4 import BeautifulSoup
 from urllib3 import request
 
-from .discriminators.transaction import modification_map
+from src.discriminators.transaction import modification_map
 
 
 def fetch_number_of_commits(url: str) -> Optional[int]:

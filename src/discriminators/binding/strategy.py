@@ -1,7 +1,7 @@
 from typing import Protocol
 
-from .graph import Graph
-from .repository import Repository
+from src.discriminators.binding.graph import Graph
+from src.discriminators.binding.repository import Repository
 
 
 class BindingStrategy(Protocol):

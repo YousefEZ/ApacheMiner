@@ -9,7 +9,7 @@ from typing import Callable, NewType, Optional, Self, TypedDict
 
 import pydriller
 
-from .binding.file_types import FileName
+from src.discriminators.binding.file_types import FileName
 
 FileNumber = NewType("FileNumber", int)
 

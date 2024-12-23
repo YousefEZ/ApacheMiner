@@ -3,7 +3,7 @@ from typing import Protocol
 import rich.progress
 
 from src.discriminators.binding.strategy import BindingStrategy
-from src.transaction import TransactionLog, Transactions
+from src.discriminators.transaction import TransactionLog, Transactions
 
 console = rich.console.Console()
 

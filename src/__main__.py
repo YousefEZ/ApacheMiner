@@ -9,11 +9,10 @@ import rich.progress
 import rich.table
 import rich.theme
 
+from src import apache_list, driller, github
+from src.discriminators import transaction
+from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
-
-from . import apache_list, driller, github
-from .discriminators import transaction
-from .driver import generate_driver
 
 P = ParamSpec("P")
 

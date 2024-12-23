@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Generator, NamedTuple, Protocol, Type, TypeVar
 
-from .file_types import ProgramFile, SourceFile, TestFile
+from src.discriminators.binding.file_types import ProgramFile, SourceFile, TestFile
 
 MAIN = "main"
 SOURCE_DIR = "src/main/java"

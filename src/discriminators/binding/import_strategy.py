@@ -5,10 +5,10 @@ from typing import Generator, Optional, override
 
 import rich.progress
 
-from .file_types import ProgramFile, SourceFile
-from .graph import Graph
-from .repository import Repository
-from .strategy import BindingStrategy
+from src.discriminators.binding.file_types import ProgramFile, SourceFile
+from src.discriminators.binding.graph import Graph
+from src.discriminators.binding.repository import Repository
+from src.discriminators.binding.strategy import BindingStrategy
 
 
 @dataclass(frozen=True)
