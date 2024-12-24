@@ -4,12 +4,10 @@ from functools import cached_property
 
 import rich.progress
 
-from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
-from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.binding.file_types import FileName, ProgramFile, TestFile
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
-from src.discriminators.transaction import TransactionLog, TransactionMap, Transactions
+from src.discriminators.transaction import TransactionLog
 
 console = rich.console.Console()
 
@@ -17,8 +15,8 @@ console = rich.console.Console()
 @dataclass(frozen=True)
 class TestStatistics:
     test: TestFile
-    before: list[SourceFile]
-    after: list[SourceFile]
+    before: list[ProgramFile]
+    after: list[ProgramFile]
 
 
 @dataclass(frozen=True)
@@ -26,15 +24,15 @@ class BeforeAfterStatistics(Statistics):
     test_statistics: list[TestStatistics]
 
     @cached_property
-    def aggregate_before(self) -> set[SourceFile]:
+    def aggregate_before(self) -> set[ProgramFile]:
         return set().union(*[statistic.before for statistic in self.test_statistics])
 
     @cached_property
-    def aggregate_after(self) -> set[SourceFile]:
+    def aggregate_after(self) -> set[ProgramFile]:
         return set().union(*[statistic.after for statistic in self.test_statistics])
 
     @cached_property
-    def test_first(self) -> set[SourceFile]:
+    def test_first(self) -> set[ProgramFile]:
         return self.aggregate_before - self.aggregate_after
 
     def output(self) -> str:

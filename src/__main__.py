@@ -11,6 +11,10 @@ import rich.theme
 
 from src import apache_list, driller, github
 from src.discriminators import transaction
+from src.discriminators.before_after_discriminator import BeforeAfterDiscriminator
+from src.discriminators.binding.import_strategy import ImportStrategy
+from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.commit_sequence_discriminator import CommitSequenceDiscriminator
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
 
@@ -227,6 +231,22 @@ def association(
             console.print(table)
         else:
             print(results.associated_files)
+
+
+@analyze.command()
+@click.option("--transaction_file", "-t", type=click.Path(), required=True)
+@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
+@click.option("--repository", "-r", type=click.Path(), required=True)
+def before_after(transaction_file: str, map_file: str, repository: str) -> None:
+    with open(transaction_file) as t, open(map_file) as m:
+        logs = transaction.Transactions.deserialize(t.read())
+        mapping = transaction.TransactionMap.deserialize(m.read())
+
+    transactions = transaction.TransactionLog(logs, mapping)
+    discriminator = BeforeAfterDiscriminator(
+        transactions, ImportStrategy(JavaRepository(os.path.abspath(repository)))
+    )
+    print(discriminator.statistics.output())
 
 
 cli.add_command(fetch)
