@@ -249,6 +249,22 @@ def before_after(transaction_file: str, map_file: str, repository: str) -> None:
     print(discriminator.statistics.output())
 
 
+@analyze.command()
+@click.option("--transaction_file", "-t", type=click.Path(), required=True)
+@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
+@click.option("--repository", "-r", type=click.Path(), required=True)
+def commit_sequence(transaction_file: str, map_file: str, repository: str) -> None:
+    with open(transaction_file) as t, open(map_file) as m:
+        logs = transaction.Transactions.deserialize(t.read())
+        mapping = transaction.TransactionMap.deserialize(m.read())
+
+    transactions = transaction.TransactionLog(logs, mapping)
+    discriminator = CommitSequenceDiscriminator(
+        transactions, ImportStrategy(JavaRepository(os.path.abspath(repository)))
+    )
+    print(discriminator.statistics.output())
+
+
 cli.add_command(fetch)
 cli.add_command(drill)
 cli.add_command(analyze)
