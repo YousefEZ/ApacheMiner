@@ -84,6 +84,7 @@ class CommitSequenceDiscriminator(Discriminator):
                 ):
                     hits[test_file].append(commit)
                     # TODO: check coverage updates in improved version
+                    # TODO: log distance from test to source file
 
             if source_id in commit.files:
                 if (
