@@ -1,10 +1,10 @@
 from collections import defaultdict
 from dataclasses import dataclass
 
-from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
-from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.repository import Repository
-from src.discriminators.binding.strategy import BindingStrategy
+from .file_types import FileName, ProgramFile
+from .graph import Graph
+from .repository import Repository
+from .strategy import BindingStrategy
 
 
 @dataclass(frozen=True)
@@ -26,12 +26,15 @@ class NameStrategy(BindingStrategy):
             for source_file in files.source_files
         }
 
-        links: dict[TestFile, set[SourceFile]] = defaultdict(set)
+        links: dict[ProgramFile, set[ProgramFile]] = defaultdict(set)
 
         for test in base_names_tests:
             if test.replace("Test", "") in base_names_source:
                 links[base_names_tests[test]].add(
                     base_names_source[FileName(test.replace("Test", ""))]
+                )
+                links[base_names_source[FileName(test.replace("Test", ""))]].add(
+                    base_names_tests[test]
                 )
 
         return Graph(
@@ -39,3 +42,6 @@ class NameStrategy(BindingStrategy):
             test_files=set(base_names_tests.values()),
             links=links,
         )
+
+    def graph(self) -> Graph:
+        return self._graph_generator()

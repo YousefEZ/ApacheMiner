@@ -19,8 +19,8 @@ def visualize_project(binder: BindingStrategy):
         test_node = f"Test: {test.name}"
         graph.add_node(test_node, type="test")
 
-        for source_file in file_graph.links[test]:
-            source_node = f"Source: {source_file.name}"
+        for linked_file in file_graph.links[test]:
+            source_node = f"Source: {linked_file.name}"
             graph.add_edge(test_node, source_node)
 
     pos = nx.spring_layout(graph)

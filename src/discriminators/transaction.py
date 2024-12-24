@@ -30,14 +30,21 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 @dataclass(frozen=True)
 class Commit:
     number: int
-    files: list[FileNumber]
+    files: dict[FileNumber, pydriller.ModificationType]
 
     def serialize(self) -> str:
-        return " ".join(map(str, self.files))
+        return " ".join(
+            f"{file_num}:{modification_map[mod_type]}"
+            for file_num, mod_type in self.files.items()
+        )
 
     @classmethod
     def deserialize(cls, number: int, text: str) -> Self:
-        return cls(number, [FileNumber(int(file)) for file in text.strip().split(" ")])
+        file_dict = {}
+        for item in text.strip().split(" "):
+            file_num, mod_type = item.split(":")
+            file_dict[FileNumber(int(file_num))] = reverse_modification_map[mod_type]
+        return cls(number, file_dict)
 
 
 @dataclass(frozen=True)
@@ -80,7 +87,7 @@ class Transactions:
         )
 
     def serialize(self) -> str:
-        return "\n".join(" ".join(map(str, commit.files)) for commit in self.commits)
+        return "\n".join(commit.serialize() for commit in self.commits)
 
     def first_occurrence(self, file_number: FileNumber) -> Optional[Commit]:
         for commit in self.commits:
@@ -141,7 +148,10 @@ class TransactionLog:
         commit_id = 0
         commits: list[Commit] = []
         for commit in self.transactions.commits:
-            new_files = [file for file in commit.files if file not in removed_ids]
+            new_files: dict[FileNumber, pydriller.ModificationType] = {}
+            for file in commit.files:
+                if file not in removed_ids:
+                    new_files[file] = commit.files[file]
             if not new_files:
                 continue
 
@@ -169,7 +179,7 @@ class TransactionLog:
 
         for commit_number, commit in commits:
             group: list[dict[str, str]] = list(commit)
-            items: list[FileNumber] = []
+            changes: dict[FileNumber, pydriller.ModificationType] = dict()
             for change in group:
                 modification_type = reverse_modification_map[
                     change["modification_type"]
@@ -186,18 +196,18 @@ class TransactionLog:
                     name_map[id_counter] = [file_name]
                     id_map[file_name] = id_counter
                     idNum = id_counter
-                    items.append(idNum)
+                    changes[idNum] = modification_type
                 elif modification_type == pydriller.ModificationType.DELETE:
                     assert file_name in id_map
                     id_counter = FileNumber(1 + id_counter)
                     idNum = id_map[file_name]
                     del id_map[file_name]
-                    items.append(idNum)
+                    changes[idNum] = modification_type
                 elif modification_type == pydriller.ModificationType.MODIFY:
                     assert file_name in id_map
                     id_counter = FileNumber(1 + id_counter)
                     idNum = id_map[file_name]
-                    items.append(idNum)
+                    changes[idNum] = modification_type
                 elif modification_type == pydriller.ModificationType.RENAME:
                     oldId, newId = map(FileName, change["file"].split("|"))
                     assert oldId in id_map
@@ -206,9 +216,14 @@ class TransactionLog:
                     del id_map[oldId]
                     name_map[idNum].append(newId)
                     id_map[newId] = idNum
-                    items.append(idNum)
+                    changes[idNum] = modification_type
 
-            transactions.append(Commit(number=commit_number, files=sorted(items)))
+            transactions.append(
+                Commit(
+                    number=commit_number,
+                    files=dict(sorted(changes.items(), key=lambda item: item[0])),
+                )
+            )
 
         return cls(
             transactions=Transactions(transactions),

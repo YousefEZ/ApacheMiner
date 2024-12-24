@@ -1,14 +1,15 @@
 import os
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Generator, Optional, override
 
 import rich.progress
 
-from src.discriminators.binding.file_types import ProgramFile, SourceFile
-from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.repository import Repository
-from src.discriminators.binding.strategy import BindingStrategy
+from .file_types import ProgramFile
+from .graph import Graph
+from .repository import Repository
+from .strategy import BindingStrategy
 
 
 @dataclass(frozen=True)
@@ -39,21 +40,24 @@ class ImportStrategy(BindingStrategy):
         return imports
 
     @lru_cache
-    def fetch_links(self, java_file: ProgramFile) -> set[SourceFile]:
-        links: set[SourceFile] = set()
+    def fetch_links(self, java_file: ProgramFile) -> set[ProgramFile]:
+        links: set[ProgramFile] = set()
         for source_file in self.repository.files[java_file.project].source_files:
             if self.import_name_of(source_file) in self.fetch_import_names(java_file):
                 links.add(source_file)
         return links
 
     def _graph_generator(self) -> Generator[Graph, None, None]:
-        for files in self.repository.files.values():
-            links = {
-                test_file: self.fetch_links(test_file)
-                for test_file in rich.progress.track(
-                    files.test_files, "Creating links for tests..."
-                )
-            }
+        for i, files in enumerate(self.repository.files.values()):
+            links: dict[ProgramFile, set[ProgramFile]] = defaultdict(set)
+            for test_file in rich.progress.track(
+                files.test_files,
+                f"Creating links #{i}...",
+            ):
+                links[test_file] = self.fetch_links(test_file)
+                for source_file in links[test_file]:
+                    links[source_file].add(test_file)
+
             yield Graph(
                 source_files=files.source_files,
                 test_files=files.test_files,
@@ -70,15 +74,15 @@ class ImportStrategy(BindingStrategy):
 class RecursiveImportStrategy(ImportStrategy):
     @override
     @lru_cache
-    def fetch_links(self, java_file: ProgramFile) -> set[SourceFile]:
+    def fetch_links(self, java_file: ProgramFile) -> set[ProgramFile]:
         return self.recursive_links(java_file)
 
     def recursive_links(
-        self, target: ProgramFile, visited: Optional[set[SourceFile]] = None
-    ) -> set[SourceFile]:
+        self, target: ProgramFile, visited: Optional[set[ProgramFile]] = None
+    ) -> set[ProgramFile]:
         if visited is None:
             visited = set()
-        links: set[SourceFile] = super().fetch_links(target).copy()
+        links: set[ProgramFile] = super().fetch_links(target).copy()
         for link in self.fetch_links(target):
             if link in visited:
                 continue

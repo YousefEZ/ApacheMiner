@@ -79,16 +79,3 @@ class BeforeAfterDiscriminator(Discriminator):
             if before or after:
                 output.append(TestStatistics(test, before, after))
         return BeforeAfterStatistics(test_statistics=output)
-
-
-if __name__ == "__main__":
-    with open("transactions.txt") as t, open("mapping.json") as m:
-        logs = Transactions.deserialize(t.read())
-        mapping = TransactionMap.deserialize(m.read())
-
-    transactions = TransactionLog(logs, mapping)
-    discriminator = BeforeAfterDiscriminator(
-        transactions, ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
-    )
-
-    print(discriminator.statistics.output())
