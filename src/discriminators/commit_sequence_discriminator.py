@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -17,7 +18,7 @@ LENIENCY = 0
 @dataclass(frozen=True)
 class Stats:
     source: SourceFile
-    changed_tests_per_commit: list[dict[ProgramFile, Commit]]
+    changed_tests_per_commit: list[dict[ProgramFile, list[Commit]]]
 
     @cached_property
     def is_tfd(self) -> bool:
@@ -68,8 +69,8 @@ class CommitSequenceDiscriminator(Discriminator):
         source_id: FileNumber,
         i: int,
         tests: set[ProgramFile],
-    ) -> tuple[dict[ProgramFile, Commit], Commit]:
-        hits: dict[ProgramFile, Commit] = {}
+    ) -> tuple[dict[ProgramFile, list[Commit]], Commit]:
+        hits: dict[ProgramFile, list[Commit]] = defaultdict(list)
         for commit in self.transaction.transactions.commits[i:]:
             for test_file in tests:
                 path = FileName(
@@ -81,7 +82,7 @@ class CommitSequenceDiscriminator(Discriminator):
                     test_id in commit.files
                     and modification_map[commit.files[test_id]] == "M"
                 ):
-                    hits[test_file] = commit
+                    hits[test_file].append(commit)
                     # TODO: check coverage updates in improved version
 
             if source_id in commit.files:
