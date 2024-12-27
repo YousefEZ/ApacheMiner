@@ -246,16 +246,16 @@ def association(
     "--binding", "-b", type=click.Choice(list(strategies.keys())), required=True
 )
 def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
-    with tempfile.TemporaryDirectory() as temp_dir, rich.progress.Progress() as progress:
-        OUTPUT_FILE = f"{temp_dir}/dump.csv"
+    with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
+        OUTPUT_FILE = f"{dir}/dump.csv"
 
         console.print(f"Cloning repository from {url}")
-        git.Repo.clone_from(url=url, to_path=temp_dir)
+        git.Repo.clone_from(url=url, to_path=dir)
 
         console.print("Repository cloned")
-        console.print(f"Drilling repository from {temp_dir}")
+        console.print(f"Drilling repository from {dir}")
 
-        driller.drill_repository(temp_dir, OUTPUT_FILE, progress)
+        driller.drill_repository(dir, OUTPUT_FILE, progress)
         console.print("Repository drilled")
 
         with open(OUTPUT_FILE, "r") as f:
@@ -264,7 +264,7 @@ def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Stra
             )
 
         progress.stop()
-        binding_strategy = strategies[binding](JavaRepository(temp_dir))
+        binding_strategy = strategies[binding](JavaRepository(dir))
         discriminator = discriminator_factory[discriminator_type](
             transaction_log, binding_strategy
         )

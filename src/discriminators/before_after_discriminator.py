@@ -1,3 +1,4 @@
+import json
 import os
 from dataclasses import dataclass
 from functools import cached_property
@@ -83,12 +84,12 @@ class BeforeAfterDiscriminator(Discriminator):
 
 if __name__ == "__main__":
     with open("transactions.txt") as t, open("mapping.json") as m:
-        logs = Transactions.deserialize(t.read())
-        mapping = TransactionMap.deserialize(m.read())
+        transactions = Transactions.model_validate(json.load(t))
+        mapping = TransactionMap.model_validate(json.load(m))
 
-    transactions = TransactionLog(logs, mapping)
+    transaction_log = TransactionLog(transactions=transactions, mapping=mapping)
     discriminator = BeforeAfterDiscriminator(
-        transactions, ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
+        transaction_log, ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
     )
 
     print(discriminator.statistics.output())
