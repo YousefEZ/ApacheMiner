@@ -8,9 +8,13 @@ import click
 import rich.progress
 import rich.table
 import rich.theme
+import git
 
 from src import apache_list, driller, github
 from src.discriminators import transaction
+from src.discriminators.binding.factory import Strategies, strategies
+from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
 
@@ -158,9 +162,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[task_id].description = (
-                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
-            )
+            progress.tasks[
+                task_id
+            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
@@ -175,8 +179,8 @@ def transform(_input_file: str, output: str, map_file: str) -> None:
         transaction_log = transaction.TransactionLog.from_commit_data(
             list(csv.DictReader(r))
         )
-        w.write(transaction_log.transactions.serialize())
-        mw.write(transaction_log.mapping.serialize())
+        w.write(transaction_log.transactions.model_dump_json(indent=2))
+        mw.write(transaction_log.mapping.model_dump_json(indent=2))
 
 
 @click.group()
@@ -227,6 +231,46 @@ def association(
             console.print(table)
         else:
             print(results.associated_files)
+
+
+@cli.command()
+@click.option("--url", "-u", required=True)
+@click.option(
+    "--discriminator",
+    "-d",
+    "discriminator_type",
+    type=click.Choice(list(discriminator_factory.keys())),
+    required=True,
+)
+@click.option(
+    "--binding", "-b", type=click.Choice(list(strategies.keys())), required=True
+)
+def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
+    with tempfile.TemporaryDirectory() as temp_dir, rich.progress.Progress() as progress:
+        OUTPUT_FILE = f"{temp_dir}/dump.csv"
+
+        console.print(f"Cloning repository from {url}")
+        git.Repo.clone_from(url=url, to_path=temp_dir)
+
+        console.print("Repository cloned")
+        console.print(f"Drilling repository from {temp_dir}")
+
+        driller.drill_repository(temp_dir, OUTPUT_FILE, progress)
+        console.print("Repository drilled")
+
+        with open(OUTPUT_FILE, "r") as f:
+            transaction_log = transaction.TransactionLog.from_commit_data(
+                list(csv.DictReader(f))
+            )
+
+        progress.stop()
+        binding_strategy = strategies[binding](JavaRepository(temp_dir))
+        discriminator = discriminator_factory[discriminator_type](
+            transaction_log, binding_strategy
+        )
+        statistics = discriminator.statistics
+
+        console.print(statistics.output())
 
 
 cli.add_command(fetch)
