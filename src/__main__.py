@@ -1,8 +1,8 @@
 import csv
+import json
 import os
 import re
 import tempfile
-import json
 from typing import Optional, ParamSpec
 
 import click
@@ -13,11 +13,10 @@ import rich.theme
 
 from src import apache_list, driller, github
 from src.discriminators import transaction
-
-from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.commit_sequence_discriminator import CommitSequenceDiscriminator
 from src.discriminators.binding.factory import Strategies, strategy_factory
+from src.discriminators.binding.import_strategy import ImportStrategy
 from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.commit_sequence_discriminator import CommitSequenceDiscriminator
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
@@ -238,7 +237,6 @@ def association(
             print(results.associated_files)
 
 
-
 @analyze.command()
 @click.option("--transaction_file", "-t", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
@@ -248,7 +246,9 @@ def commit_sequence(transaction_file: str, map_file: str, repository: str) -> No
         transactions = transaction.Transactions.model_validate(json.load(t))
         mapping = transaction.TransactionMap.model_validate(json.load(m))
 
-    transactions = transaction.TransactionLog(transactions=transactions, mapping=mapping)
+    transactions = transaction.TransactionLog(
+        transactions=transactions, mapping=mapping
+    )
     discriminator = CommitSequenceDiscriminator(
         transactions, ImportStrategy(JavaRepository(os.path.abspath(repository)))
     )
@@ -293,7 +293,6 @@ def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Stra
         statistics = discriminator.statistics
 
         console.print(statistics.output())
-
 
 
 cli.add_command(fetch)
