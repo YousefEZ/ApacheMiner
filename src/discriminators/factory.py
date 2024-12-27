@@ -1,11 +1,13 @@
 from typing import Literal, Type
 
 from src.discriminators.before_after_discriminator import BeforeAfterDiscriminator
+from src.discriminators.commit_sequence_discriminator import CommitSequenceDiscriminator
 from src.discriminators.discriminator import Discriminator
 
-DiscriminatorTypes = Literal["before_after"]
+DiscriminatorTypes = Literal["before_after", "commit_sequence"]
 
 
 discriminator_factory: dict[DiscriminatorTypes, Type[Discriminator]] = {
     "before_after": BeforeAfterDiscriminator,
+    "commit_sequence": CommitSequenceDiscriminator,
 }
