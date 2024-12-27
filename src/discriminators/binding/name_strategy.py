@@ -42,6 +42,3 @@ class NameStrategy(BindingStrategy):
             test_files=set(base_names_tests.values()),
             links=links,
         )
-
-    def graph(self) -> Graph:
-        return self._graph_generator()
