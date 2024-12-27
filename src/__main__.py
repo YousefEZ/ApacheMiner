@@ -162,9 +162,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[
-                task_id
-            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            progress.tasks[task_id].description = (
+                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            )
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
@@ -175,12 +175,13 @@ def repositories(
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
 def transform(_input_file: str, output: str, map_file: str) -> None:
-    with open(_input_file, "r") as r, open(output, "w") as w, open(map_file, "w") as mw:
+    with open(_input_file, "r") as commit_file:
         transaction_log = transaction.TransactionLog.from_commit_data(
-            list(csv.DictReader(r))
+            list(csv.DictReader(commit_file))
         )
-        w.write(transaction_log.transactions.model_dump_json(indent=2))
-        mw.write(transaction_log.mapping.model_dump_json(indent=2))
+    with open(output, "w") as transactions, open(map_file, "w") as mapping:
+        transactions.write(transaction_log.transactions.model_dump_json(indent=2))
+        mapping.write(transaction_log.mapping.model_dump_json(indent=2))
 
 
 @click.group()
