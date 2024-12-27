@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 import re
 import tempfile
@@ -14,9 +13,7 @@ import rich.theme
 from src import apache_list, driller, github
 from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
-from src.discriminators.binding.import_strategy import ImportStrategy
 from src.discriminators.binding.repository import JavaRepository
-from src.discriminators.commit_sequence_discriminator import CommitSequenceDiscriminator
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
@@ -165,9 +162,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[task_id].description = (
-                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
-            )
+            progress.tasks[
+                task_id
+            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
@@ -235,24 +232,6 @@ def association(
             console.print(table)
         else:
             print(results.associated_files)
-
-
-@analyze.command()
-@click.option("--transaction_file", "-t", type=click.Path(), required=True)
-@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-@click.option("--repository", "-r", type=click.Path(), required=True)
-def commit_sequence(transaction_file: str, map_file: str, repository: str) -> None:
-    with open(transaction_file) as t, open(map_file) as m:
-        transactions = transaction.Transactions.model_validate(json.load(t))
-        mapping = transaction.TransactionMap.model_validate(json.load(m))
-
-    transactions = transaction.TransactionLog(
-        transactions=transactions, mapping=mapping
-    )
-    discriminator = CommitSequenceDiscriminator(
-        transactions, ImportStrategy(JavaRepository(os.path.abspath(repository)))
-    )
-    print(discriminator.statistics.output())
 
 
 @cli.command()
