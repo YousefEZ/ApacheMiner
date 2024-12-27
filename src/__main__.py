@@ -12,7 +12,7 @@ import rich.theme
 
 from src import apache_list, driller, github
 from src.discriminators import transaction
-from src.discriminators.binding.factory import Strategies, strategies
+from src.discriminators.binding.factory import Strategies, strategy_factory
 from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.driver import generate_driver
@@ -162,9 +162,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[task_id].description = (
-                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
-            )
+            progress.tasks[
+                task_id
+            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
             driller.drill_repository(
                 row["repository"], output[1].replace(output[0], row["name"]), progress
             )
@@ -243,7 +243,7 @@ def association(
     required=True,
 )
 @click.option(
-    "--binding", "-b", type=click.Choice(list(strategies.keys())), required=True
+    "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
 def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
     with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
@@ -264,7 +264,7 @@ def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Stra
             )
 
         progress.stop()
-        binding_strategy = strategies[binding](JavaRepository(dir))
+        binding_strategy = strategy_factory[binding](JavaRepository(dir))
         discriminator = discriminator_factory[discriminator_type](
             transaction_log, binding_strategy
         )

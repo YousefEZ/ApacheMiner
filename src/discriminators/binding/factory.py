@@ -9,8 +9,7 @@ from src.discriminators.binding.strategy import BindingStrategy
 
 Strategies = Literal["import", "name", "recursive_import"]
 
-
-strategies: dict[Strategies, Type[BindingStrategy]] = {
+strategy_factory: dict[Strategies, Type[BindingStrategy]] = {
     "import": ImportStrategy,
     "name": NameStrategy,
     "recursive_import": RecursiveImportStrategy,
