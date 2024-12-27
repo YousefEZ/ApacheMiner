@@ -14,7 +14,7 @@ class NameStrategy(BindingStrategy):
 
     repository: Repository
 
-    def _graph_generator(self) -> Graph:
+    def graph(self) -> Graph:
         base_names_tests = {
             test_file.name: test_file
             for files in self.repository.files.values()

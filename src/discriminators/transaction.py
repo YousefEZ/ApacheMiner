@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import itertools
-import json
 import operator
-from dataclasses import dataclass
 from functools import cached_property
 from typing import Callable, NewType, Optional, Self, TypedDict
 
 import pydriller
+from pydantic import BaseModel
 
 from src.discriminators.binding.file_types import FileName
 
@@ -27,28 +26,12 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 )
 
 
-@dataclass(frozen=True)
-class Commit:
+class Commit(BaseModel):
     number: int
     files: dict[FileNumber, pydriller.ModificationType]
 
-    def serialize(self) -> str:
-        return " ".join(
-            f"{file_num}:{modification_map[mod_type]}"
-            for file_num, mod_type in self.files.items()
-        )
 
-    @classmethod
-    def deserialize(cls, number: int, text: str) -> Self:
-        file_dict = {}
-        for item in text.strip().split(" "):
-            file_num, mod_type = item.split(":")
-            file_dict[FileNumber(int(file_num))] = reverse_modification_map[mod_type]
-        return cls(number, file_dict)
-
-
-@dataclass(frozen=True)
-class TransactionMap:
+class TransactionMap(BaseModel):
     id_to_names: dict[FileNumber, list[FileName]]
 
     @cached_property
@@ -59,35 +42,9 @@ class TransactionMap:
             for name in v
         }
 
-    @classmethod
-    def deserialize(cls, text: str) -> Self:
-        data: dict[str, str] = json.loads(text)
-        return cls(
-            id_to_names={
-                FileNumber(int(k)): [FileName(name) for name in v]
-                for k, v in data.items()
-            }
-        )
 
-    def serialize(self) -> str:
-        return json.dumps(self.id_to_names, indent=2)
-
-
-@dataclass(frozen=True)
-class Transactions:
+class Transactions(BaseModel):
     commits: list[Commit]
-
-    @classmethod
-    def deserialize(cls, lines: str) -> Self:
-        return cls(
-            commits=[
-                Commit.deserialize(number, line)
-                for number, line in enumerate(lines.split("\n"))
-            ],
-        )
-
-    def serialize(self) -> str:
-        return "\n".join(commit.serialize() for commit in self.commits)
 
     def first_occurrence(self, file_number: FileNumber) -> Optional[Commit]:
         for commit in self.commits:
@@ -101,27 +58,9 @@ class SerializedTransactionLog(TypedDict):
     mapping: str
 
 
-@dataclass(frozen=True)
-class TransactionLog:
+class TransactionLog(BaseModel):
     transactions: Transactions
     mapping: TransactionMap
-
-    @classmethod
-    def deserialize(cls, text: str) -> Self:
-        data = json.loads(text)
-        return cls(
-            transactions=Transactions.deserialize(data["transactions"]),
-            mapping=TransactionMap.deserialize(data["mapping"]),
-        )
-
-    def serialize(self) -> str:
-        return json.dumps(
-            {
-                "transactions": self.transactions.serialize(),
-                "mapping": self.mapping.serialize(),
-            },
-            indent=2,
-        )
 
     def filter_on(self, filterer: Callable[[FileName], bool]) -> TransactionLog:
         """Removes anything that does pass the filterer, and creates a new
@@ -158,7 +97,8 @@ class TransactionLog:
             commits.append(Commit(number=commit_id, files=new_files))
             commit_id += 1
         return TransactionLog(
-            transactions=Transactions(commits), mapping=TransactionMap(mapping)
+            transactions=Transactions(commits=commits),
+            mapping=TransactionMap(id_to_names=mapping),
         )
 
     @classmethod
@@ -177,7 +117,9 @@ class TransactionLog:
         name_map: dict[FileNumber, list[FileName]] = dict()
         transactions: list[Commit] = []
 
-        for commit_number, commit in commits:
+        commit_number = -1
+        for commit_hash, commit in commits:
+            commit_number += 1
             group: list[dict[str, str]] = list(commit)
             changes: dict[FileNumber, pydriller.ModificationType] = dict()
             for change in group:
@@ -226,6 +168,6 @@ class TransactionLog:
             )
 
         return cls(
-            transactions=Transactions(transactions),
-            mapping=TransactionMap(name_map),
+            transactions=Transactions(commits=transactions),
+            mapping=TransactionMap(id_to_names=name_map),
         )

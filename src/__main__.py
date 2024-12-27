@@ -2,19 +2,23 @@ import csv
 import os
 import re
 import tempfile
+import json
 from typing import Optional, ParamSpec
 
 import click
+import git
 import rich.progress
 import rich.table
 import rich.theme
 
 from src import apache_list, driller, github
 from src.discriminators import transaction
-from src.discriminators.before_after_discriminator import BeforeAfterDiscriminator
+
 from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.commit_sequence_discriminator import CommitSequenceDiscriminator
+from src.discriminators.binding.factory import Strategies, strategy_factory
+from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
 
@@ -175,12 +179,13 @@ def repositories(
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
 def transform(_input_file: str, output: str, map_file: str) -> None:
-    with open(_input_file, "r") as r, open(output, "w") as w, open(map_file, "w") as mw:
+    with open(_input_file, "r") as commit_file:
         transaction_log = transaction.TransactionLog.from_commit_data(
-            list(csv.DictReader(r))
+            list(csv.DictReader(commit_file))
         )
-        w.write(transaction_log.transactions.serialize())
-        mw.write(transaction_log.mapping.serialize())
+    with open(output, "w") as transactions, open(map_file, "w") as mapping:
+        transactions.write(transaction_log.transactions.model_dump_json(indent=2))
+        mapping.write(transaction_log.mapping.model_dump_json(indent=2))
 
 
 @click.group()
@@ -233,21 +238,6 @@ def association(
             print(results.associated_files)
 
 
-@analyze.command()
-@click.option("--transaction_file", "-t", type=click.Path(), required=True)
-@click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-@click.option("--repository", "-r", type=click.Path(), required=True)
-def before_after(transaction_file: str, map_file: str, repository: str) -> None:
-    with open(transaction_file) as t, open(map_file) as m:
-        logs = transaction.Transactions.deserialize(t.read())
-        mapping = transaction.TransactionMap.deserialize(m.read())
-
-    transactions = transaction.TransactionLog(logs, mapping)
-    discriminator = BeforeAfterDiscriminator(
-        transactions, ImportStrategy(JavaRepository(os.path.abspath(repository)))
-    )
-    print(discriminator.statistics.output())
-
 
 @analyze.command()
 @click.option("--transaction_file", "-t", type=click.Path(), required=True)
@@ -255,14 +245,55 @@ def before_after(transaction_file: str, map_file: str, repository: str) -> None:
 @click.option("--repository", "-r", type=click.Path(), required=True)
 def commit_sequence(transaction_file: str, map_file: str, repository: str) -> None:
     with open(transaction_file) as t, open(map_file) as m:
-        logs = transaction.Transactions.deserialize(t.read())
-        mapping = transaction.TransactionMap.deserialize(m.read())
+        transactions = transaction.Transactions.model_validate(json.load(t))
+        mapping = transaction.TransactionMap.model_validate(json.load(m))
 
-    transactions = transaction.TransactionLog(logs, mapping)
+    transactions = transaction.TransactionLog(transactions=transactions, mapping=mapping)
     discriminator = CommitSequenceDiscriminator(
         transactions, ImportStrategy(JavaRepository(os.path.abspath(repository)))
     )
     print(discriminator.statistics.output())
+
+
+@cli.command()
+@click.option("--url", "-u", required=True)
+@click.option(
+    "--discriminator",
+    "-d",
+    "discriminator_type",
+    type=click.Choice(list(discriminator_factory.keys())),
+    required=True,
+)
+@click.option(
+    "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
+)
+def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
+    with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
+        OUTPUT_FILE = f"{dir}/dump.csv"
+
+        console.print(f"Cloning repository from {url}")
+        git.Repo.clone_from(url=url, to_path=dir)
+
+        console.print("Repository cloned")
+        console.print(f"Drilling repository from {dir}")
+
+        driller.drill_repository(dir, OUTPUT_FILE, progress)
+        console.print("Repository drilled")
+
+        with open(OUTPUT_FILE, "r") as f:
+            transaction_log = transaction.TransactionLog.from_commit_data(
+                list(csv.DictReader(f))
+            )
+
+        progress.stop()
+        binding_strategy = strategy_factory[binding](JavaRepository(dir))
+        discriminator = discriminator_factory[discriminator_type](
+            transaction_log, binding_strategy
+        )
+        statistics = discriminator.statistics
+
+        console.print(statistics.output())
+
 
 
 cli.add_command(fetch)
