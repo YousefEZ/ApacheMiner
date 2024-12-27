@@ -8,6 +8,7 @@ import rich.progress
 from bs4 import BeautifulSoup
 from urllib3 import request
 
+from git import Repo
 from src.discriminators.transaction import modification_map
 
 
@@ -53,17 +54,28 @@ def format_file(file: pydriller.ModifiedFile, delimiter: str = "|") -> str:
     assert False, f"Unknown change type: {file.change_type}"
 
 
+def get_commit_count(path: str) -> int:
+    if pydriller.Repository._is_remote(path):
+        commits = fetch_number_of_commits(path)
+        assert commits is not None, "Failed to fetch commit count"
+        return commits
+
+    repo = Repo(path)
+    branch = repo.active_branch
+    return sum(1 for _ in repo.iter_commits(branch))
+
+
 def drill_repository(
-    url: str, output_file: str, progress: rich.progress.Progress, delimiter: str = "|"
+    path: str, output_file: str, progress: rich.progress.Progress, delimiter: str = "|"
 ) -> None:
-    commit_count = fetch_number_of_commits(url)
+    commit_count = get_commit_count(path)
     with open(output_file, "w") as f:
         task = progress.add_task(
-            f"Fetching commits for [cyan]{url}[/cyan]", total=commit_count
+            f"Fetching commits for [cyan]{path}[/cyan]", total=commit_count
         )
         writer = csv.DictWriter(f, fieldnames=["hash", "file", "modification_type"])
         writer.writeheader()
-        for commit in pydriller.Repository(url).traverse_commits():
+        for commit in pydriller.Repository(path).traverse_commits():
             progress.advance(task)
             for file in commit.modified_files:
                 if file.change_type == pydriller.ModificationType.UNKNOWN:
