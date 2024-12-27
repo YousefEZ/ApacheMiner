@@ -1,7 +1,7 @@
 from typing import Literal, Type
 
-from src.discriminators.discriminator import Discriminator
 from src.discriminators.before_after_discriminator import BeforeAfterDiscriminator
+from src.discriminators.discriminator import Discriminator
 
 DiscriminatorTypes = Literal["before_after"]
 

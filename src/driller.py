@@ -6,9 +6,9 @@ import pydriller
 import rich
 import rich.progress
 from bs4 import BeautifulSoup
+from git import Repo
 from urllib3 import request
 
-from git import Repo
 from src.discriminators.transaction import modification_map
 
 

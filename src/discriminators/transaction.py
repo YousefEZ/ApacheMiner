@@ -6,10 +6,9 @@ from functools import cached_property
 from typing import Callable, NewType, Optional, Self, TypedDict
 
 import pydriller
+from pydantic import BaseModel
 
 from src.discriminators.binding.file_types import FileName
-
-from pydantic import BaseModel
 
 FileNumber = NewType("FileNumber", int)
 
