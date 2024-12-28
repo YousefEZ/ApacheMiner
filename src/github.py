@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 
-from . import project
+from src import project
 
 __all__ = ("retrieve_project_list",)
 
