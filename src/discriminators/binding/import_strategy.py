@@ -47,11 +47,11 @@ class ImportStrategy(BindingStrategy):
         return links
 
     def _graph_generator(self) -> Generator[Graph, None, None]:
-        for files in self.repository.files.values():
+        for i, files in enumerate(self.repository.files.values()):
             links = {
                 test_file: self.fetch_links(test_file)
                 for test_file in rich.progress.track(
-                    files.test_files, "Creating links for tests..."
+                    files.test_files, f"Creating links #{i}..."
                 )
             }
             yield Graph(
