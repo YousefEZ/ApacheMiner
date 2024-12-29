@@ -61,7 +61,7 @@ class BeforeAfterDiscriminator(Discriminator):
             assert base_commit is not None, f"File not found {test.name} @ {path}"
             before, after = [], []
 
-            for source_file in graph.links[test]:
+            for source_file in graph.test_to_source_links[test]:
                 path = FileName(
                     os.path.join(
                         os.path.basename(source_file.project), source_file.path

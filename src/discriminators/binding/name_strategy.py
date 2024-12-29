@@ -37,5 +37,5 @@ class NameStrategy(BindingStrategy):
         return Graph(
             source_files=set(base_names_source.values()),
             test_files=set(base_names_tests.values()),
-            links=links,
+            test_to_source_links=links,
         )

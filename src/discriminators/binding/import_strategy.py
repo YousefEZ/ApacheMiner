@@ -57,7 +57,7 @@ class ImportStrategy(BindingStrategy):
             yield Graph(
                 source_files=files.source_files,
                 test_files=files.test_files,
-                links=links,
+                test_to_source_links=links,
             )
 
     def graph(self) -> Graph:
