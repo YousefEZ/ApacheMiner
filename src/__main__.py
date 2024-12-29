@@ -246,32 +246,42 @@ def association(
 @click.option(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
-def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
-    with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
-        OUTPUT_FILE = f"{dir}/dump.csv"
+@click.option("--repo", "-r", type=click.Path(), default="commits.csv")
+def discriminate(
+    url: str, discriminator_type: DiscriminatorTypes, binding: Strategies, repo: str
+) -> None:
+    cwd = os.path.join(os.getcwd(), "repositories")
+    directory_name = url.split("/")[-1].replace(".git", "")
+    dir = os.path.join(cwd, directory_name)
+    if not os.path.exists("repositories"):
+        console.print("Creating path")
+        os.makedirs(dir)
 
+    path = os.path.join(dir, repo)
+    if not os.path.exists(path):
+        progress = rich.progress.Progress()
         console.print(f"Cloning repository from {url}")
         git.Repo.clone_from(url=url, to_path=dir)
 
         console.print("Repository cloned")
         console.print(f"Drilling repository from {dir}")
 
-        driller.drill_repository(dir, OUTPUT_FILE, progress)
+        driller.drill_repository(dir, path, progress)
         console.print("Repository drilled")
-
-        with open(OUTPUT_FILE, "r") as f:
-            transaction_log = transaction.TransactionLog.from_commit_data(
-                list(csv.DictReader(f))
-            )
-
         progress.stop()
-        binding_strategy = strategy_factory[binding](JavaRepository(dir))
-        discriminator = discriminator_factory[discriminator_type](
-            transaction_log, binding_strategy
-        )
-        statistics = discriminator.statistics
 
-        console.print(statistics.output())
+    with open(path, "r") as f:
+        transaction_log = transaction.TransactionLog.from_commit_data(
+            list(csv.DictReader(f))
+        )
+
+    binding_strategy = strategy_factory[binding](JavaRepository(dir))
+    discriminator = discriminator_factory[discriminator_type](
+        transaction_log, binding_strategy
+    )
+    statistics = discriminator.statistics
+
+    console.print(statistics.output())
 
 
 cli.add_command(fetch)
