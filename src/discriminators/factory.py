@@ -2,8 +2,8 @@ from typing import Literal, Type
 
 from src.discriminators.before_after_discriminator import BeforeAfterDiscriminator
 from src.discriminators.commit_seq_discriminator import CommitSequenceDiscriminator
-from src.discriminators.LLM_discriminator import LLMDiscriminator
 from src.discriminators.discriminator import Discriminator
+from src.discriminators.LLM_discriminator import LLMDiscriminator
 
 DiscriminatorTypes = Literal["before_after", "commit_sequence", "llm"]
 

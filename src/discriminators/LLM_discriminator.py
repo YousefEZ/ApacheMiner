@@ -9,7 +9,7 @@ import rich.progress
 from .binding.file_types import FileName, SourceFile
 from .binding.strategy import BindingStrategy
 from .discriminator import Discriminator, Statistics
-from .transaction import Commit, FileNumber, TransactionLog
+from .transaction import FileNumber, TransactionLog
 
 console = rich.console.Console()
 TPM = 100000
@@ -54,9 +54,11 @@ class LLMDiscriminator(Discriminator):
         self, source_id: FileNumber, commit_list: list[tuple[int, set[FileNumber]]]
     ) -> bool:
         prompt = (
-            "Analyze these commits to determine if the source file follows test-first development. "
-            + "The source file id is {source_id}, all other file ids are for its testers. "
-            + f"Only output True or False. \n\n{[f"Commit #{idx}: Files: {files}\n" for (idx, files) in commit_list]}"
+            "Analyze these commits to determine if the source file follows "
+            + "test-first development. "
+            + f"The source file id is {source_id}, all other file ids are for its "
+            + "testers. Only output True or False. \n\n"
+            + f"{[f"Commit #{idx}: Files: {files}\n" for (idx, files) in commit_list]}"
         )
         delay = (len(prompt) / TPM) * 60
         try:
@@ -64,10 +66,12 @@ class LLMDiscriminator(Discriminator):
             completion = client.chat.completions.create(
                 model="gpt-4o-mini", messages=[{"role": "user", "content": prompt}]
             )
-            message = completion.choices[0].message.content.lower()
-            if message == "true":
+            message = completion.choices[0].message.content
+            if message is None:
+                raise ValueError("No response from OpenAI")
+            if message.lower() == "true":
                 return True
-            elif message == "false":
+            elif message.lower() == "false":
                 return False
             else:
                 print(f">> Invalid response from OpenAI: {message}")
@@ -86,7 +90,7 @@ class LLMDiscriminator(Discriminator):
                 continue  # no tests for this source file
 
             # collect relevant commits
-            commit_list: list[Commit] = []
+            commit_list: list[tuple[int, set[FileNumber]]] = []
             source_path = FileName(
                 os.path.join(os.path.basename(source_file.project), source_file.path)
             )
