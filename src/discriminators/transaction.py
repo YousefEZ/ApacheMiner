@@ -28,7 +28,7 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 
 class Commit(BaseModel):
     number: int
-    files: dict[FileNumber, pydriller.ModificationType]
+    files: dict[FileNumber, tuple[pydriller.ModificationType, list[int]]]
 
 
 class TransactionMap(BaseModel):
@@ -127,38 +127,44 @@ class TransactionLog(BaseModel):
                     change["modification_type"]
                 ]
 
-                file_name: FileName = FileName(change["file"].strip())
+                commit_data = change["file"].strip().split("|")
+                file_name: FileName
 
                 if (
                     modification_type == pydriller.ModificationType.ADD
                     or modification_type == pydriller.ModificationType.COPY
                 ):
+                    file_name = FileName(commit_data[0])
                     assert file_name not in id_map
                     id_counter = FileNumber(1 + id_counter)
                     name_map[id_counter] = [file_name]
                     id_map[file_name] = id_counter
                     idNum = id_counter
-                    changes[idNum] = modification_type
+                    changes[idNum] = modification_type, []
                 elif modification_type == pydriller.ModificationType.DELETE:
+                    file_name = FileName(commit_data[0])
                     assert file_name in id_map
                     id_counter = FileNumber(1 + id_counter)
                     idNum = id_map[file_name]
                     del id_map[file_name]
-                    changes[idNum] = modification_type
+                    changes[idNum] = modification_type, []
                 elif modification_type == pydriller.ModificationType.MODIFY:
+                    file_name = FileName(commit_data[0])
+                    assert commit_data[1] and commit_data[2]
+                    line_changes = (int(commit_data[1]), int(commit_data[2]))
                     assert file_name in id_map
                     id_counter = FileNumber(1 + id_counter)
                     idNum = id_map[file_name]
-                    changes[idNum] = modification_type
+                    changes[idNum] = modification_type, line_changes
                 elif modification_type == pydriller.ModificationType.RENAME:
-                    oldId, newId = map(FileName, change["file"].split("|"))
+                    oldId, newId = map(FileName, commit_data)
                     assert oldId in id_map
                     assert newId not in id_map
                     idNum = id_map[oldId]
                     del id_map[oldId]
                     name_map[idNum].append(newId)
                     id_map[newId] = idNum
-                    changes[idNum] = modification_type
+                    changes[idNum] = modification_type, []
 
             transactions.append(
                 Commit(

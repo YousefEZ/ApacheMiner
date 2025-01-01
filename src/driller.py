@@ -46,10 +46,14 @@ def format_file(file: pydriller.ModifiedFile, delimiter: str = "|") -> str:
     elif (
         file.change_type == pydriller.ModificationType.ADD
         or file.change_type == pydriller.ModificationType.COPY
-        or file.change_type == pydriller.ModificationType.MODIFY
     ):
         assert file.new_path
         return file.new_path
+    elif file.change_type == pydriller.ModificationType.MODIFY:
+        return (
+            f"{file.new_path}{delimiter}"
+            + f"{file.added_lines}{delimiter}{file.deleted_lines}"
+        )
 
     assert False, f"Unknown change type: {file.change_type}"
 

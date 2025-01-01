@@ -9,7 +9,7 @@ import rich.progress
 from .binding.file_types import FileName, SourceFile
 from .binding.strategy import BindingStrategy
 from .discriminator import Discriminator, Statistics
-from .transaction import FileNumber, TransactionLog
+from .transaction import FileNumber, TransactionLog, modification_map
 
 console = rich.console.Console()
 TPM = 100000
@@ -49,6 +49,19 @@ class TestedFirstStatistics(Statistics):
 class LLMDiscriminator(Discriminator):
     transaction: TransactionLog
     file_binder: BindingStrategy
+
+    def substantial_change(self, commit_info) -> bool:
+        if modification_map[commit_info[0]] == "A":
+            return True  # always accept new files
+        if commit_info is None:
+            return False  # no change
+        if modification_map[commit_info[0]] != "M":
+            return False  # not a modification (or creation)
+        if len(commit_info[1]) != 2:
+            return False  # no lines added or deleted
+        if commit_info[1][0] < 20 or commit_info[1][0] < commit_info[1][1]:
+            return False  # not a substantial change to code
+        return True
 
     def query_tfd(
         self, source_id: FileNumber, commit_list: list[tuple[int, set[FileNumber]]]
@@ -104,7 +117,9 @@ class LLMDiscriminator(Discriminator):
             for commit in self.transaction.transactions.commits:
                 commit_data: set[FileNumber] = set()
                 for file_number in file_collection:
-                    if file_number in commit.files:
+                    if file_number in commit.files and self.substantial_change(
+                        commit.files[file_number]
+                    ):
                         commit_data.add(file_number)
                 if len(commit_data) > 0:
                     commit_list.append((commit.number, commit_data))

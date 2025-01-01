@@ -59,6 +59,19 @@ class CommitSequenceDiscriminator(Discriminator):
     transaction: TransactionLog
     file_binder: BindingStrategy
 
+    def substantial_change(self, commit_info) -> bool:
+        if modification_map[commit_info[0]] == "A":
+            return True  # always accept new files
+        if commit_info is None:
+            return False  # no change
+        if modification_map[commit_info[0]] != "M":
+            return False  # not a modification (or creation)
+        if len(commit_info[1]) != 2:
+            return False  # no lines added or deleted
+        if commit_info[1][0] < 20 or commit_info[1][0] < commit_info[1][1]:
+            return False  # not a substantial change to code
+        return True
+
     def tfd_iterations(
         self,
         source_id: FileNumber,
@@ -72,10 +85,8 @@ class CommitSequenceDiscriminator(Discriminator):
                     os.path.join(os.path.basename(test_file.project), test_file.path)
                 )
                 test_id = self.transaction.mapping.name_to_id[path]
-
-                if (
-                    test_id in commit.files
-                    and modification_map[commit.files[test_id]] == "M"
+                if test_id in commit.files and self.substantial_change(
+                    commit.files[test_id]
                 ):
                     hits[test_file].append(commit)
                     # TODO: check coverage updates in improved version
@@ -83,8 +94,8 @@ class CommitSequenceDiscriminator(Discriminator):
 
             if source_id in commit.files:
                 if (
-                    modification_map[commit.files[source_id]] == "M"
-                    or modification_map[commit.files[source_id]] == "D"
+                    self.substantial_change(commit.files[source_id])
+                    or modification_map[commit.files[source_id][0]] == "D"
                 ):
                     return hits, commit  # return early if source file is updated
         return hits, self.transaction.transactions.commits[-1]
@@ -104,10 +115,9 @@ class CommitSequenceDiscriminator(Discriminator):
             last_commit = self.transaction.transactions.first_occurrence(source_id)
             if last_commit is None:
                 continue  # never appears in the transaction log
-            while (
-                modification_map[last_commit.files[source_id]] != "D"
-                and last_commit.number < len(self.transaction.transactions.commits) - 1
-            ):
+            while modification_map[
+                last_commit.files[source_id][0]
+            ] != "D" and self.substantial_change(last_commit.files[source_id]):
                 hits, last_commit = self.tfd_iterations(
                     source_id,
                     last_commit.number + 1,
