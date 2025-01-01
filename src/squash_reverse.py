@@ -11,7 +11,6 @@ from github.GithubObject import (
     NotSet,
     Opt,
     is_defined,
-    is_optional,
 )
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
@@ -77,6 +76,9 @@ def get_custom_pulls(
     calls `GET /repos/{owner}/{repo}/pulls <https://docs.github.com/en/rest/reference/pulls>`
 
     Args:
+        repository (Repository): The repository to fetch pull requests from
+
+    Kwargs:
         state (str): Indicates the state of the pull requests to return.
                      Can be either open, closed, or all. Default: open
         sort (str): What to sort results by. Can be either created,
@@ -89,28 +91,19 @@ def get_custom_pulls(
 
     Returns (PaginatedList[CustomPullRequest]): A list of pull requests
     """
-    assert is_optional(state, str), state
-    assert is_optional(sort, str), sort
-    assert is_optional(direction, str), direction
-    assert is_optional(base, str), base
-    assert is_optional(head, str), head
+    items = {
+        "state": state,
+        "sort": sort,
+        "direction": direction,
+        "base": base,
+        "head": head,
+    }
 
-    url_parameters = dict()
-    if is_defined(state):
-        url_parameters["state"] = state
-    if is_defined(sort):
-        url_parameters["sort"] = sort
-    if is_defined(direction):
-        url_parameters["direction"] = direction
-    if is_defined(base):
-        url_parameters["base"] = base
-    if is_defined(head):
-        url_parameters["head"] = head
     return PaginatedList(
         CustomPullRequest,
         repository.requester,
         f"{repository.url}/pulls",
-        url_parameters,
+        {key: value for key, value in items.items() if is_defined(value)},
     )
 
 
