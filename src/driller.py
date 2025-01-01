@@ -10,7 +10,7 @@ from git import Repo
 from urllib3 import request
 
 from src.discriminators.transaction import modification_map
-
+from src.MergeFinder import MergeFinder
 
 def fetch_number_of_commits(url: str) -> Optional[int]:
     response = request(method="GET", url=url)
@@ -64,11 +64,36 @@ def get_commit_count(path: str) -> int:
     branch = repo.active_branch
     return sum(1 for _ in repo.iter_commits(branch))
 
+def fix_entries(file_path: str, dict_fixes: dict):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+
+    with open(file_path, 'w') as file:
+        for line in lines:
+            if line.strip() in dict_fixes.keys():
+                file.write(dict_fixes[line.strip()] + '\n')
+            else:
+                file.write(line)
+
+
+def find_last_n_commits(n: int, output_file: str,history: list):
+    with open(output_file, "r") as r:
+        lines = [line.strip() for line in r if line.strip()]
+    last_commits = []
+    for i in range(1,len(lines)):
+        c = lines[-i].split(",")[0]
+        if not c in last_commits and not commit_list:
+            last_commits.append(c)
+        if len(last_commits)>=n:
+            break
+    return last_commits
+
 
 def drill_repository(
     path: str, output_file: str, progress: rich.progress.Progress, delimiter: str = "|"
 ) -> None:
     commit_count = get_commit_count(path)
+    merge_list = MergeFinder(path).safe_get_merge_commits()
     with open(output_file, "w") as f:
         task = progress.add_task(
             f"Fetching commits for [cyan]{path}[/cyan]", total=commit_count
@@ -77,6 +102,12 @@ def drill_repository(
         writer.writeheader()
         for commit in pydriller.Repository(path).traverse_commits():
             progress.advance(task)
+            if commit.hash in merge_list and len(commit.parents) <2:
+                # Squashed merged
+                f.flush()
+                last_commits = find_last_n_commits(commit.files,output_file,merge_list)
+                
+                pass
             for file in commit.modified_files:
                 if file.change_type == pydriller.ModificationType.UNKNOWN:
                     # this is persmission changes
