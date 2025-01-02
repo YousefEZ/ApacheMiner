@@ -259,16 +259,16 @@ def discriminate(
 
     path = os.path.join(dir, repo)
     if not os.path.exists(path):
-        progress = rich.progress.Progress()
-        console.print(f"Cloning repository from {url}")
-        git.Repo.clone_from(url=url, to_path=dir)
+        with rich.progress.Progress() as progress:
+            console.print(f"Cloning repository from {url}")
+            git.Repo.clone_from(url=url, to_path=dir)
 
-        console.print("Repository cloned")
-        console.print(f"Drilling repository from {dir}")
+            console.print("Repository cloned")
+            console.print(f"Drilling repository from {dir}")
 
-        driller.drill_repository(dir, path, progress)
-        console.print("Repository drilled")
-        progress.stop()
+            driller.drill_repository(dir, path, progress)
+            console.print("Repository drilled")
+            progress.stop()
 
     with open(path, "r") as f:
         transaction_log = transaction.TransactionLog.from_commit_data(
