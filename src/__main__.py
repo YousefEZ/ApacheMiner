@@ -10,7 +10,7 @@ import rich.progress
 import rich.table
 import rich.theme
 
-from src import apache_list, driller, github
+from src import apache_list, driller, github_scraper
 from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
 from src.discriminators.binding.repository import JavaRepository
@@ -110,7 +110,7 @@ def github_list(url: str, output: str):
         return
     with console.status(f":mag_right: Fetching GitHub Repository for {url}"):
         driver = generate_driver()
-        project_list = github.retrieve_project_list(url, driver)
+        project_list = github_scraper.retrieve_project_list(url, driver)
 
     console.print(f"Found [cyan]{len(project_list)}[/cyan] projects")
 
