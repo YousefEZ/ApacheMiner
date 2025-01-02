@@ -73,12 +73,13 @@ class UnSquashedCommit(CommitProtocol):
 
 
 def singleton(function: Callable[P, T]) -> Callable[P, T]:
-    """A decorator that makes a function a singleton
+    """A decorator that makes the result of a function (T) a singleton
 
     Args:
-        function (Callable[[], T]): A function that returns an object
+        function (Callable[[], T]): A function that returns an object T
 
-    Returns (Callable[[], T]): A singleton function
+    Returns (Callable[[], T]): A function only executed once for the
+        same arguments (persistent cache)
     """
     instances: dict[Any, T] = dict()
 
@@ -145,7 +146,7 @@ def get_squash_merges(
         for pull in progress.track(
             pull_requests,
             total=pull_requests.totalCount,
-            description="Fetching Squash Merges",
+            description="Fetching Squash Merges...",
         )
         if pull.merged_at is not None and pull.merge_commit_sha != pull.head.sha
     )

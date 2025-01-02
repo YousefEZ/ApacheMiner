@@ -93,12 +93,15 @@ def stiched_commits(
         squashes = get_squash_merges(*get_repo_information(path), progress=progress)
 
         progress.console.print(
-            f":mag_left: Found [cyan]{len(squashes)}[/cyan] squash merges to reverse",
+            f":mag_right: Found [cyan]{len(squashes)}[/cyan] squash merges to reverse",
             emoji=True,
         )
         # preprocess to avoid undefined behaviour when doing it within the for loop
         hash_to_commits = {
-            squash.merge_commit_sha: expand_squash_merge(squash) for squash in squashes
+            squash.merge_commit_sha: expand_squash_merge(squash)
+            for squash in progress.track(
+                squashes, description="Expanding Squash Merges..."
+            )
         }
 
     for commit in pydriller.Repository(path).traverse_commits():
