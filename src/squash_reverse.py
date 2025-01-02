@@ -94,7 +94,8 @@ def get_squash_merges(
     org: str, name: str, progress: Optional[rich.progress.Progress] = None
 ) -> frozenset[PullRequest]:
     """Gets all squash merges from a repository, by fetching all closed pull requests
-    and filtering out merged pull requests that have a different merge commit sha than the head sha.
+    and filtering out merged pull requests that have a different merge commit sha
+    than the head sha.
 
     Args:
         org (str): The organization name
