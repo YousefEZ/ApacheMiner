@@ -1,6 +1,6 @@
 import csv
 import json
-from typing import Generator, NamedTuple, Optional
+from typing import Generator, NamedTuple, Optional, Sequence
 
 import pydriller
 import rich
@@ -10,7 +10,7 @@ from git import Repo
 from urllib3 import request
 
 from src.discriminators.transaction import modification_map
-from src.squash_reverse import SquashedCommit, expand_squash_merge, get_squash_merges
+from src.squash_reverse import expand_squash_merge, get_squash_merges
 from src.types.commit import CommitProtocol, ModifiedFileProtocol
 
 
@@ -87,11 +87,15 @@ def stiched_commits(
 
     Returns (Generator[pydriller.Commit, None, None]): The commits in the repository
     """
-    hash_to_commits: dict[str, list[SquashedCommit]] = {}
+    hash_to_commits: dict[str, Sequence[CommitProtocol]] = {}
 
     if reverse_squash_merge:
         squashes = get_squash_merges(*get_repo_information(path), progress=progress)
 
+        progress.console.print(
+            f":mag_left: Found [cyan]{len(squashes)}[/cyan] squash merges to reverse",
+            emoji=True,
+        )
         # preprocess to avoid undefined behaviour when doing it within the for loop
         hash_to_commits = {
             squash.merge_commit_sha: expand_squash_merge(squash) for squash in squashes
