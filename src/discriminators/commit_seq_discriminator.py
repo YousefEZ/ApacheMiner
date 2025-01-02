@@ -5,11 +5,12 @@ from functools import cached_property
 from typing import Optional
 
 import rich.progress
+from pydriller import ModificationType
 
 from .binding.file_types import FileName, SourceFile, TestFile
 from .binding.strategy import BindingStrategy
 from .discriminator import Discriminator, Statistics
-from .transaction import Commit, TransactionLog, modification_map
+from .transaction import Commit, TransactionLog
 
 console = rich.console.Console()
 LENIENCY = 0
@@ -18,7 +19,7 @@ LENIENCY = 0
 @dataclass(frozen=True)
 class Stats:
     source: SourceFile
-    changed_tests_per_commit: list[dict[TestFile, list[Commit]]]
+    changed_tests_per_commit: list[dict[TestFile, list[int]]]
 
     @cached_property
     def is_tfd(self) -> bool:
@@ -60,22 +61,20 @@ class CommitSequenceDiscriminator(Discriminator):
     transaction: TransactionLog
     file_binder: BindingStrategy
 
-    def substantial_change(self, commit_info) -> bool:
-        if modification_map[commit_info[0]] == "A":
+    def adds_features(self, commit_info) -> bool:
+        if commit_info == ModificationType.ADD:
             return True  # always accept new files
         if commit_info is None:
             return False  # no change
-        if modification_map[commit_info[0]] != "M":
-            return False  # not a modification (or creation)
-        if len(commit_info[1]) != 2:
-            return False  # no lines added or deleted
-        if commit_info[1][0] < 20 or commit_info[1][0] < commit_info[1][1]:
-            return False  # not a substantial change to code
+        if not isinstance(commit_info, tuple):
+            return False  # not a modification with method additions
+        if len(commit_info[1]) == 0:
+            return False  # no methods added
         return True
 
     def next_commit(self, file_number, commits: list[Commit]) -> Optional[Commit]:
         for commit in commits:
-            if file_number in commit.files and self.substantial_change(
+            if file_number in commit.files and self.adds_features(
                 commit.files[file_number]
             ):
                 return commit
@@ -85,20 +84,27 @@ class CommitSequenceDiscriminator(Discriminator):
         self,
         range: tuple[int, int],
         tests: set[TestFile],
-    ) -> dict[TestFile, list[Commit]]:
-        hits: dict[TestFile, list[Commit]] = defaultdict(list)
+        source_name: str,
+    ) -> dict[TestFile, list[int]]:
+        hits: dict[TestFile, list[int]] = defaultdict(list)
         for commit in self.transaction.transactions.commits[range[0] : range[1] + 1]:
             for test_file in tests:
                 path = FileName(
                     os.path.join(os.path.basename(test_file.project), test_file.path)
                 )
                 test_id = self.transaction.mapping.name_to_id[path]
-                if test_id in commit.files and self.substantial_change(
+                if test_id in commit.files and self.adds_features(
                     commit.files[test_id]
                 ):
-                    hits[test_file].append(commit)
-                    # TODO: check coverage updates in improved version
-                    # TODO: log distance from test to source file
+                    if (
+                        isinstance(commit.files[test_id], tuple)
+                        and source_name in commit.files[test_id][2]
+                    ):
+                        hits[test_file].append(commit.number)
+                        # test file updated with new methods and calls to source_file
+                    elif commit.files[test_id] == ModificationType.ADD:
+                        hits[test_file].append(commit.number)
+                        # test file created
         return hits
 
     @property
@@ -121,12 +127,13 @@ class CommitSequenceDiscriminator(Discriminator):
                 continue  # never appears in the transaction log
             while (
                 this_commit is not None
-                and modification_map[this_commit.files[source_id][0]] != "D"
+                and this_commit.files[source_id] != ModificationType.DELETE
                 and last_commit.number <= len(self.transaction.transactions.commits) - 1
             ):
                 hits = self.tfd_iterations(
                     (last_commit.number, this_commit.number),
                     graph.source_to_test_links[source_file],
+                    source_file.name.replace(".java", ""),
                 )
                 stats.changed_tests_per_commit.append(hits)
                 if this_commit.number == len(self.transaction.transactions.commits) - 1:

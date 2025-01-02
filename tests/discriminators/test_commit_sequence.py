@@ -35,16 +35,21 @@ class MockTransactionLog(TransactionLog):
         for i, commit_info in enumerate(commit_list):
             commit = Commit(number=i, files={})
             transactions.commits.append(commit)
-            for file, modification, plus_minus in commit_info:
+            for file, modification in commit_info:
                 if modification == modification_type.ADD:
                     mapping.id_to_names[FileNumber(file_id)] = [file.name]
-                    commit.files[FileNumber(file_id)] = (modification, plus_minus)
+                    commit.files[FileNumber(file_id)] = modification_type.ADD
                     file_id += 1
-                else:
+                elif modification == modification_type.MODIFY and isinstance(
+                    modification, tuple
+                ):
                     commit.files[mapping.name_to_id[file.name]] = (
-                        modification,
-                        plus_minus,
+                        modification[0],
+                        modification[1],
+                        modification[2],
                     )
+                else:
+                    commit.files[mapping.name_to_id[file.name]] = modification
         return cls(mapping=mapping, transactions=transactions)
 
 
@@ -107,15 +112,18 @@ def test_mock_data():
     files = {sourceA, sourceB, testAB, testA, testB}
     commit_list = [
         {
-            (sourceA, modification_type.ADD, ()),
-            (sourceB, modification_type.ADD, ()),
+            (sourceA, modification_type.ADD),
+            (sourceB, modification_type.ADD),
         },
         {
-            (testAB, modification_type.ADD, ()),
-            (testA, modification_type.ADD, ()),
-            (sourceB, modification_type.MODIFY, (1, 2)),
+            (testAB, modification_type.ADD),
+            (testA, modification_type.ADD),
+            (
+                sourceB,
+                (modification_type.MODIFY, frozenset({"featureMethod"}), frozenset()),
+            ),
         },
-        {(testB, modification_type.ADD, ())},
+        {(testB, modification_type.ADD)},
     ]
     transactions, binding_strategy = generate(files, commit_list)
     assert len(transactions.transactions.commits) == 3
@@ -171,10 +179,10 @@ def test_found_tfd_split_commits():
     # base case
     commit_list = [
         {
-            (testA, modification_type.ADD, ()),
+            (testA, modification_type.ADD),
         },
         {
-            (sourceA, modification_type.ADD, ()),
+            (sourceA, modification_type.ADD),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
@@ -186,12 +194,19 @@ def test_found_tfd_split_commits():
     # test case with multiple commits
     commit_list.append(
         {
-            (testA, modification_type.MODIFY, (30, 0)),
+            (
+                testA,
+                (
+                    modification_type.MODIFY,
+                    frozenset({"method"}),
+                    frozenset({"A-source"}),
+                ),
+            ),
         }
     )
     commit_list.append(
         {
-            (sourceA, modification_type.MODIFY, (30, 0)),
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     )
     transactions, binding_strategy = generate(files, commit_list)
@@ -206,8 +221,8 @@ def test_found_tfd_same_commits():
     # base case
     commit_list = [
         {
-            (testA, modification_type.ADD, ()),
-            (sourceA, modification_type.ADD, ()),
+            (testA, modification_type.ADD),
+            (sourceA, modification_type.ADD),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
@@ -219,8 +234,15 @@ def test_found_tfd_same_commits():
     # test case with multiple commits
     commit_list.append(
         {
-            (testA, modification_type.MODIFY, (30, 0)),
-            (sourceA, modification_type.MODIFY, (30, 0)),
+            (
+                testA,
+                (
+                    modification_type.MODIFY,
+                    frozenset({"method"}),
+                    frozenset({"A-source"}),
+                ),
+            ),
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     )
     transactions, binding_strategy = generate(files, commit_list)
@@ -235,10 +257,10 @@ def test_failed_tfd():
     # base case
     commit_list = [
         {
-            (sourceA, modification_type.ADD, ()),
+            (sourceA, modification_type.ADD),
         },
         {
-            (testA, modification_type.ADD, ()),
+            (testA, modification_type.ADD),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
@@ -250,11 +272,11 @@ def test_failed_tfd():
     # source commited without test
     commit_list = [
         {
-            (sourceA, modification_type.ADD, ()),
-            (testA, modification_type.ADD, ()),
+            (sourceA, modification_type.ADD),
+            (testA, modification_type.ADD),
         },
         {
-            (sourceA, modification_type.MODIFY, (30, 0)),
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
@@ -266,7 +288,14 @@ def test_failed_tfd():
     # source commited before test
     commit_list.append(
         {
-            (testA, modification_type.MODIFY, (30, 0)),
+            (
+                testA,
+                (
+                    modification_type.MODIFY,
+                    frozenset({"method"}),
+                    frozenset({"A-source"}),
+                ),
+            ),
         },
     )
     transactions, binding_strategy = generate(files, commit_list)
@@ -280,45 +309,193 @@ def test_only_one_testfile_change_needed():
     files = {sourceA, testA, testAB, sourceB}
     commit_list = [
         {
-            (sourceA, modification_type.ADD, ()),
-            (testA, modification_type.ADD, ()),
-            (testAB, modification_type.ADD, ()),
-            (sourceB, modification_type.ADD, ()),
+            (sourceA, modification_type.ADD),
+            (testA, modification_type.ADD),
+            (testAB, modification_type.ADD),
+            (sourceB, modification_type.ADD),
         },
         {
-            (testA, modification_type.MODIFY, (30, 0)),
+            (
+                testA,
+                (
+                    modification_type.MODIFY,
+                    frozenset({"method"}),
+                    frozenset({"A-source"}),
+                ),
+            ),
         },
         {
-            (sourceA, modification_type.MODIFY, (30, 0)),
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
-            assert stats.is_tfd
+            stats_sourceA = stats
+            break
+    assert stats_sourceA.is_tfd
+    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
+    assert stats_sourceA.changed_tests_per_commit[1] == {testA: [1]}
 
 
-def test_only_substantial_changes_noted():
+def test_other_modification_types_not_counted():
     files = {sourceA, testA, testAB, sourceB}
     commit_list = [
         {
-            (sourceA, modification_type.ADD, ()),
-            (testA, modification_type.ADD, ()),
-            (testAB, modification_type.ADD, ()),
-            (sourceB, modification_type.ADD, ()),
+            (sourceA, modification_type.ADD),
+            (testA, modification_type.ADD),
+            (testAB, modification_type.ADD),
+            (sourceB, modification_type.ADD),
+        },
+    ]
+    different_modification_type = [
+        {
+            (
+                testA,
+                modification_type.COPY,
+            ),
+            (
+                testAB,
+                modification_type.ADD,
+            ),
+            (
+                testAB,
+                modification_type.RENAME,
+            ),
         },
         {
-            (testA, modification_type.MODIFY, (0, 30)),
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
+        },
+    ]
+    transactions, binding_strategy = generate(
+        files, commit_list + different_modification_type
+    )
+    assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
+    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    stats_sourceA = discriminator.statistics.test_statistics[0]
+    for stats in discriminator.statistics.test_statistics:
+        if stats.source == sourceA:
+            stats_sourceA = stats
+            break
+    assert not stats_sourceA.is_tfd
+    assert len(stats_sourceA.changed_tests_per_commit) == 2
+    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
+    assert stats_sourceA.changed_tests_per_commit[1] == {}
+
+
+def test_non_feature_additive_changes_not_counted():
+    files = {sourceA, testA, testAB, sourceB}
+    commit_list = [
+        {
+            (sourceA, modification_type.ADD),
+            (testA, modification_type.ADD),
+            (testAB, modification_type.ADD),
+            (sourceB, modification_type.ADD),
+        },
+    ]
+    modify_without_new_features = [
+        {
+            (
+                testA,
+                (
+                    modification_type.MODIFY,
+                    frozenset(),
+                    frozenset(),
+                ),
+            ),
         },
         {
-            (sourceA, modification_type.MODIFY, (30, 0)),
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
+        },
+    ]
+    transactions, binding_strategy = generate(
+        files, commit_list + modify_without_new_features
+    )
+    assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
+    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    stats_sourceA = discriminator.statistics.test_statistics[0]
+    for stats in discriminator.statistics.test_statistics:
+        if stats.source == sourceA:
+            stats_sourceA = stats
+            break
+    assert not stats_sourceA.is_tfd
+    assert len(stats_sourceA.changed_tests_per_commit) == 2
+    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
+    assert stats_sourceA.changed_tests_per_commit[1] == {}
+
+
+def test_test_other_source_not_counted():
+    files = {sourceA, testA, testAB, sourceB}
+    commit_list = [
+        {
+            (sourceA, modification_type.ADD),
+            (testA, modification_type.ADD),
+            (testAB, modification_type.ADD),
+            (sourceB, modification_type.ADD),
+        },
+    ]
+    new_feature_for_other_file = [
+        {
+            (
+                testAB,
+                (
+                    modification_type.MODIFY,
+                    frozenset({"method"}),
+                    frozenset({"B-source"}),
+                ),
+            ),
+        },
+        {
+            (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
+        },
+    ]
+    transactions, binding_strategy = generate(
+        files, commit_list + new_feature_for_other_file
+    )
+    assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
+    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    stats_sourceA = discriminator.statistics.test_statistics[0]
+    for stats in discriminator.statistics.test_statistics:
+        if stats.source == sourceA:
+            stats_sourceA = stats
+            break
+    assert not stats_sourceA.is_tfd
+    assert len(stats_sourceA.changed_tests_per_commit) == 2
+    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
+    assert stats_sourceA.changed_tests_per_commit[1] == {}
+
+
+def test_end_when_file_deleted():
+    files = {sourceA, testA}
+    commit_list = [
+        {
+            (sourceA, modification_type.ADD),
+            (testA, modification_type.ADD),
+        },
+        {
+            (
+                testA,
+                (
+                    modification_type.MODIFY,
+                    frozenset({"method"}),
+                    frozenset({"A-source"}),
+                ),
+            ),
+        },
+        {
+            (sourceA, modification_type.DELETE),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
-    assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
-            assert not stats.is_tfd
+            stats_sourceA = stats
+            break
+    assert stats_sourceA.is_tfd
+    assert len(stats_sourceA.changed_tests_per_commit) == 1
+    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0]}

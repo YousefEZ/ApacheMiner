@@ -28,7 +28,13 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 
 class Commit(BaseModel):
     number: int
-    files: dict[FileNumber, tuple[pydriller.ModificationType, list[int]]]
+    files: dict[
+        FileNumber,
+        (
+            tuple[pydriller.ModificationType, set[str], set[str]]
+            | pydriller.ModificationType
+        ),
+    ]
 
 
 class TransactionMap(BaseModel):
@@ -117,6 +123,13 @@ class TransactionLog(BaseModel):
         name_map: dict[FileNumber, list[FileName]] = dict()
         transactions: list[Commit] = []
 
+        def logstr_to_set(string: str) -> set[str]:
+            string = string.strip().removeprefix("{").removesuffix("}")
+            strings = string.split(",")
+            for s in range(len(strings)):
+                strings[s] = strings[s].strip().removeprefix("'").removesuffix("'")
+            return set(strings)
+
         commit_number = -1
         for commit_hash, commit in commits:
             commit_number += 1
@@ -140,22 +153,29 @@ class TransactionLog(BaseModel):
                     name_map[id_counter] = [file_name]
                     id_map[file_name] = id_counter
                     idNum = id_counter
-                    changes[idNum] = modification_type, []
+                    changes[idNum] = modification_type
                 elif modification_type == pydriller.ModificationType.DELETE:
                     file_name = FileName(commit_data[0])
                     assert file_name in id_map
                     id_counter = FileNumber(1 + id_counter)
                     idNum = id_map[file_name]
                     del id_map[file_name]
-                    changes[idNum] = modification_type, []
+                    changes[idNum] = modification_type
                 elif modification_type == pydriller.ModificationType.MODIFY:
                     file_name = FileName(commit_data[0])
-                    assert commit_data[1] and commit_data[2]
-                    line_changes = (int(commit_data[1]), int(commit_data[2]))
                     assert file_name in id_map
                     id_counter = FileNumber(1 + id_counter)
                     idNum = id_map[file_name]
-                    changes[idNum] = modification_type, line_changes
+                    if len(commit_data) == 3:
+                        new_methods = logstr_to_set(commit_data[1])
+                        referenced_classes = logstr_to_set(commit_data[2])
+                        changes[idNum] = (
+                            modification_type,
+                            new_methods,
+                            referenced_classes,
+                        )
+                    else:
+                        changes[idNum] = modification_type
                 elif modification_type == pydriller.ModificationType.RENAME:
                     oldId, newId = map(FileName, commit_data)
                     assert oldId in id_map
@@ -164,7 +184,7 @@ class TransactionLog(BaseModel):
                     del id_map[oldId]
                     name_map[idNum].append(newId)
                     id_map[newId] = idNum
-                    changes[idNum] = modification_type, []
+                    changes[idNum] = modification_type
 
             transactions.append(
                 Commit(
