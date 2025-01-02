@@ -96,11 +96,11 @@ def generate(files, commit_list):
     return transactions, binding_strategy
 
 
-sourceA = SourceFile(FileName(""), FileName("A-source.java"))
-sourceB = SourceFile(FileName(""), FileName("B-source.java"))
-testAB = TestFile(FileName(""), FileName("AB-test.java"))
-testA = TestFile(FileName(""), FileName("A-test.java"))
-testB = TestFile(FileName(""), FileName("B-test.java"))
+sourceA = SourceFile("", "A-source.java")
+sourceB = SourceFile("", "B-source.java")
+testAB = TestFile("", "AB-test.java")
+testA = TestFile("", "A-test.java")
+testB = TestFile("", "B-test.java")
 
 
 def test_mock_data():
