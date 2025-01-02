@@ -252,7 +252,13 @@ def association(
 @click.option(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
-def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
+@click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
+def discriminate(
+    url: str,
+    discriminator_type: DiscriminatorTypes,
+    binding: Strategies,
+    reverse_squash: bool,
+) -> None:
     with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
         OUTPUT_FILE = f"{dir}/dump.csv"
 
@@ -262,7 +268,7 @@ def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Stra
         console.print("Repository cloned")
         console.print(f"Drilling repository from {dir}")
 
-        driller.drill_repository(dir, OUTPUT_FILE, progress)
+        driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
         console.print("Repository drilled")
 
         with open(OUTPUT_FILE, "r") as f:
