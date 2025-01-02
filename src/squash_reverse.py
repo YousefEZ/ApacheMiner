@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, ParamSpec, TypeVar
+from typing import Any, Callable, Literal, Optional, ParamSpec, Sequence, TypeVar, cast
 
+import pydriller
 import rich.progress
 from dotenv import load_dotenv
 from github import Auth, Github
+from github.Commit import Commit
 from github.PullRequest import PullRequest
 from github.Repository import Repository
+from pydriller import ModificationType
+
+from src.types.commit import ModifiedFileProtocol
 
 __all__ = ("get_squash_merges",)
 
@@ -18,6 +24,20 @@ TOKEN = os.getenv("GITHUB_TOKEN")
 
 T = TypeVar("T")
 P = ParamSpec("P")
+
+GitModificationType = Literal[
+    "added", "removed", "modified", "renamed", "copied", "changed", "unchanged"
+]
+
+change_type_mapping: dict[GitModificationType, ModificationType] = {
+    "added": ModificationType.ADD,
+    "removed": ModificationType.DELETE,
+    "modified": ModificationType.MODIFY,
+    "renamed": ModificationType.RENAME,
+    "copied": ModificationType.COPY,
+    "changed": ModificationType.UNKNOWN,
+    "unchanged": ModificationType.UNKNOWN,
+}
 
 
 def singleton(function: Callable[P, T]) -> Callable[P, T]:
@@ -70,7 +90,9 @@ def get_repository(org: str, name: str) -> Repository:
     return get_github().get_repo(f"{org}/{name}")
 
 
-def get_squash_merges(org: str, name: str) -> frozenset[PullRequest]:
+def get_squash_merges(
+    org: str, name: str, progress: Optional[rich.progress.Progress] = None
+) -> frozenset[PullRequest]:
     """Gets all squash merges from a repository, by fetching all closed pull requests
     and filtering out merged pull requests that have a different merge commit sha than the head sha.
 
@@ -80,15 +102,71 @@ def get_squash_merges(org: str, name: str) -> frozenset[PullRequest]:
 
     Returns (frozenset[PullRequest]): A set of pull requests that were squash merged
     """
+    if progress is None:
+        progress = rich.progress.Progress()
     repository = get_repository(org, name)
     pull_requests = repository.get_pulls(state="closed", base=repository.default_branch)
 
     return frozenset(
         pull
-        for pull in rich.progress.track(
+        for pull in progress.track(
             pull_requests,
             total=pull_requests.totalCount,
             description="Fetching Squash Merges",
         )
         if pull.merged_at is not None and pull.merge_commit_sha != pull.head.sha
     )
+
+
+@dataclass(frozen=True)
+class ChangedFile:
+    _filename: str
+    _change_type: pydriller.ModificationType
+
+    @property
+    def change_type(self) -> pydriller.ModificationType:
+        return self._change_type
+
+    @property
+    def old_path(self) -> Optional[str]:
+        return None
+
+    @property
+    def new_path(self) -> Optional[str]:
+        return None
+
+
+@dataclass(frozen=True)
+class SquashedCommit:
+    _modified_files: list[ChangedFile]
+    _hash: str
+
+    @property
+    def modified_files(self) -> Sequence[ModifiedFileProtocol]:
+        return self._modified_files
+
+    @property
+    def hash(self) -> str:
+        return self._hash
+
+
+def analyze_commit(commit: Commit) -> SquashedCommit:
+    return SquashedCommit(
+        _modified_files=[
+            ChangedFile(
+                file.filename,
+                change_type_mapping[cast(GitModificationType, file.status)],
+            )
+            for file in commit.files
+        ],
+        _hash=commit.sha,
+    )
+
+
+def expand_squash_merge(squash_merge: PullRequest) -> list[SquashedCommit]:
+    return list(map(analyze_commit, squash_merge.get_commits()))
+
+
+if __name__ == "__main__":
+    with rich.progress.Progress() as progress:
+        get_squash_merges("apache", "kafka", progress)
