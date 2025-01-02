@@ -62,8 +62,6 @@ class CommitSequenceDiscriminator(Discriminator):
     file_binder: BindingStrategy
 
     def adds_features(self, commit_info) -> bool:
-        if commit_info == ModificationType.ADD:
-            return True  # always accept new files
         if commit_info is None:
             return False  # no change
         if not isinstance(commit_info, tuple):
@@ -96,15 +94,9 @@ class CommitSequenceDiscriminator(Discriminator):
                 if test_id in commit.files and self.adds_features(
                     commit.files[test_id]
                 ):
-                    if (
-                        isinstance(commit.files[test_id], tuple)
-                        and source_name in commit.files[test_id][2]
-                    ):
+                    if source_name in commit.files[test_id][2]:
                         hits[test_file].append(commit.number)
                         # test file updated with new methods and calls to source_file
-                    elif commit.files[test_id] == ModificationType.ADD:
-                        hits[test_file].append(commit.number)
-                        # test file created
         return hits
 
     @property

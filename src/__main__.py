@@ -261,7 +261,7 @@ def discriminate(
         console.print(f"Cloning repository from {url}")
         git.Repo.clone_from(url=url, to_path=dir)
         console.print("Repository cloned")
-    
+
     path = os.path.join(dir, repo)
     if not os.path.exists(path):
         with rich.progress.Progress() as progress:
