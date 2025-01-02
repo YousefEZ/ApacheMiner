@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Literal, Optional, ParamSpec, Sequence, TypeVar, cast
 
@@ -44,6 +44,8 @@ change_type_mapping: dict[GitModificationType, ModificationType] = {
 class ChangedFile(ModifiedFileProtocol):
     _filename: str
     _change_type: pydriller.ModificationType
+    _old_path: Optional[str] = field(default=None)
+    _new_path: Optional[str] = field(default=None)
 
     @property
     def change_type(self) -> pydriller.ModificationType:
@@ -51,11 +53,11 @@ class ChangedFile(ModifiedFileProtocol):
 
     @property
     def old_path(self) -> Optional[str]:
-        return None
+        return self._old_path
 
     @property
     def new_path(self) -> Optional[str]:
-        return None
+        return self._new_path
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,8 @@ def transform_to_unsquashed_commit(commit: Commit) -> UnSquashedCommit:
             ChangedFile(
                 file.filename,
                 change_type_mapping[cast(GitModificationType, file.status)],
+                file.previous_filename,
+                file.filename,
             )
             for file in commit.files
         ],
