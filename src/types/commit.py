@@ -22,3 +22,6 @@ class CommitProtocol(Protocol):
 
     @property
     def hash(self) -> str: ...
+
+    @property
+    def parents(self) -> list[str]: ...

@@ -64,6 +64,7 @@ class ChangedFile(ModifiedFileProtocol):
 class UnSquashedCommit(CommitProtocol):
     _modified_files: list[ChangedFile]
     _hash: str
+    _parents: list[str]
 
     @property
     def modified_files(self) -> Sequence[ModifiedFileProtocol]:
@@ -72,6 +73,10 @@ class UnSquashedCommit(CommitProtocol):
     @property
     def hash(self) -> str:
         return self._hash
+
+    @property
+    def parents(self) -> list[str]:
+        return self._parents
 
 
 def singleton(function: Callable[P, T]) -> Callable[P, T]:
@@ -187,6 +192,7 @@ def transform_to_unsquashed_commit(commit: Commit) -> UnSquashedCommit:
     return UnSquashedCommit(
         _modified_files=[convert_pygithub_file(file) for file in commit.files],
         _hash=commit.sha,
+        _parents=[parent.sha for parent in commit.parents],
     )
 
 

@@ -122,7 +122,9 @@ def drill_repository(
         task = progress.add_task(
             f"Fetching commits for [cyan]{path}[/cyan]", total=commit_count
         )
-        writer = csv.DictWriter(f, fieldnames=["hash", "file", "modification_type"])
+        writer = csv.DictWriter(
+            f, fieldnames=["hash", "parents", "file", "modification_type"]
+        )
         writer.writeheader()
         for commit in stiched_commits(path, progress, reverse_squash_merge):
             progress.advance(task)
@@ -134,6 +136,7 @@ def drill_repository(
                 writer.writerow(
                     {
                         "hash": commit.hash,
+                        "parents": delimiter.join(commit.parents),
                         "file": format_file(file, delimiter),
                         "modification_type": modification_map[file.change_type],
                     }
