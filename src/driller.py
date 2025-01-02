@@ -59,7 +59,7 @@ def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
     if file.change_type == pydriller.ModificationType.RENAME:
         return f"{file.old_path}{delimiter}{file.new_path}"
     elif file.change_type == pydriller.ModificationType.DELETE:
-        assert file.old_path
+        assert file.old_path is not None, "Old path should be set for deletion"
         return file.old_path
     elif (
         file.change_type == pydriller.ModificationType.ADD

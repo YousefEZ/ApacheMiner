@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Callable, Literal, Optional, ParamSpec, Sequence, TypeVar, cast
 
@@ -10,6 +10,7 @@ import rich.progress
 from dotenv import load_dotenv
 from github import Auth, Github
 from github.Commit import Commit
+from github.File import File
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 from pydriller import ModificationType
@@ -42,10 +43,9 @@ change_type_mapping: dict[GitModificationType, ModificationType] = {
 
 @dataclass(frozen=True)
 class ChangedFile(ModifiedFileProtocol):
-    _filename: str
     _change_type: pydriller.ModificationType
-    _old_path: Optional[str] = field(default=None)
-    _new_path: Optional[str] = field(default=None)
+    _old_path: Optional[str]
+    _new_path: Optional[str]
 
     @property
     def change_type(self) -> pydriller.ModificationType:
@@ -154,6 +154,27 @@ def get_squash_merges(
     )
 
 
+def convert_pygithub_file(file: File) -> ChangedFile:
+    """Converts a PyGitHub File object to a ChangedFile object, as extra
+    checks need to be carried out to ensure the correct layout of data
+
+    Args:
+        file (File): A PyGitHub File object
+
+    Returns (ChangedFile): A ChangedFile object
+    """
+    change_type = change_type_mapping[cast(GitModificationType, file.status)]
+    if change_type == ModificationType.DELETE:
+        return ChangedFile(
+            _change_type=change_type, _old_path=file.filename, _new_path=None
+        )
+    return ChangedFile(
+        _change_type=change_type,
+        _old_path=file.previous_filename,
+        _new_path=file.filename,
+    )
+
+
 def transform_to_unsquashed_commit(commit: Commit) -> UnSquashedCommit:
     """Analyzes the commit, by extracting the required infromation to
     generate a UnSquashedCommit object that abides by the CommitProtocol
@@ -164,15 +185,7 @@ def transform_to_unsquashed_commit(commit: Commit) -> UnSquashedCommit:
     Returns (UnSquashedCommit): A UnSquashedCommit object
     """
     return UnSquashedCommit(
-        _modified_files=[
-            ChangedFile(
-                file.filename,
-                change_type_mapping[cast(GitModificationType, file.status)],
-                file.previous_filename,
-                file.filename,
-            )
-            for file in commit.files
-        ],
+        _modified_files=[convert_pygithub_file(file) for file in commit.files],
         _hash=commit.sha,
     )
 
