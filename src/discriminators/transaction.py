@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import operator
 from functools import cached_property
-from typing import Callable, NewType, Optional, Self, TypedDict
+from typing import Callable, NamedTuple, NewType, Optional, Self, TypedDict
 
 import pydriller
 from pydantic import BaseModel
@@ -56,6 +56,86 @@ class Transactions(BaseModel):
 class SerializedTransactionLog(TypedDict):
     transactions: str
     mapping: str
+
+
+class FileChanges(TypedDict):
+    hash: str
+    modification_type: str
+    file: str
+    parents: str
+
+
+class TransactionBuilderResult(NamedTuple):
+    transactions: Transactions
+    mapping: TransactionMap
+
+
+class TransactionBuilder:
+    """A class to build a TransactionLog from a list of FileChanges, which is based
+    off the the algorithm provided in the lecture with a few modifications to account
+    for merges"""
+
+    def __init__(self):
+        self._id_counter: FileNumber = FileNumber(0)
+        self._id_map: dict[FileName, FileNumber] = dict()
+        self._name_map: dict[FileNumber, list[FileName]] = dict()
+        self._transactions: list[Commit] = []
+        self._mapping: dict[pydriller.ModificationType, Callable[[FileName], None]] = {
+            pydriller.ModificationType.ADD: self._add,
+            pydriller.ModificationType.COPY: self._copy,
+            pydriller.ModificationType.DELETE: self._delete,
+            pydriller.ModificationType.MODIFY: self._modify,
+            pydriller.ModificationType.RENAME: self._rename,
+        }
+        self._commit_number = 0
+
+    def process(self, commit: list[FileChanges]) -> None:
+        items = []
+        for file in commit:
+            modification_type = reverse_modification_map[file["modification_type"]]
+            file_name: FileName = FileName(file["file"].strip())
+            items.append(self._mapping[modification_type](file_name))
+        self._transactions.append(
+            Commit(number=self._commit_number, files=sorted(items))
+        )
+        self._commit_number += 1
+
+    def _add(self, file_name: FileName) -> None:
+        assert file_name not in self._id_map
+        self._id_counter = FileNumber(1 + self._id_counter)
+        self._name_map[self._id_counter] = [file_name]
+        self._id_map[file_name] = self._id_counter
+
+    def _delete(self, file_name: FileName) -> None:
+        assert file_name in self._id_map
+        self._id_counter = FileNumber(1 + self._id_counter)
+        idNum = self._id_map[file_name]
+        del self._id_map[file_name]
+
+    def _modify(self, file_name: FileName) -> None:
+        assert file_name in self._id_map
+        self._id_counter = FileNumber(1 + self._id_counter)
+        idNum = self._id_map[file_name]
+
+    def _rename(self, file_name: FileName) -> None:
+        oldId, newId = map(FileName, file_name.split("|"))
+        assert oldId in self._id_map
+        assert newId not in self._id_map
+        idNum = self._id_map[oldId]
+        del self._id_map[oldId]
+        self._name_map[idNum].append(newId)
+        self._id_map[newId] = idNum
+
+    def _copy(self, file_name: FileName) -> None:
+        self._id_counter = FileNumber(1 + self._id_counter)
+        self._id_map[file_name] = self._id_counter
+        self._name_map[self._id_counter] = [file_name]
+
+    def build(self) -> TransactionBuilderResult:
+        return TransactionBuilderResult(
+            transactions=Transactions(commits=self._transactions),
+            mapping=TransactionMap(id_to_names=self._name_map),
+        )
 
 
 class TransactionLog(BaseModel):
@@ -163,3 +243,13 @@ class TransactionLog(BaseModel):
             transactions=Transactions(commits=transactions),
             mapping=TransactionMap(id_to_names=name_map),
         )
+
+    @classmethod
+    def new_from_commit_data(cls, rows: list[FileChanges]) -> Self:
+        commits = itertools.groupby(rows, operator.itemgetter("hash"))
+        builder = TransactionBuilder()
+        for _, commit in commits:
+            builder.process(list(commit))
+
+        result = builder.build()
+        return cls(transactions=result.transactions, mapping=result.mapping)
