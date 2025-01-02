@@ -14,9 +14,9 @@ from github.PullRequest import PullRequest
 from github.Repository import Repository
 from pydriller import ModificationType
 
-from src.types.commit import ModifiedFileProtocol
+from src.types.commit import CommitProtocol, ModifiedFileProtocol
 
-__all__ = ("get_squash_merges",)
+__all__ = ("get_squash_merges", "expand_squash_merge")
 
 load_dotenv()
 
@@ -38,6 +38,38 @@ change_type_mapping: dict[GitModificationType, ModificationType] = {
     "changed": ModificationType.UNKNOWN,
     "unchanged": ModificationType.UNKNOWN,
 }
+
+
+@dataclass(frozen=True)
+class ChangedFile(ModifiedFileProtocol):
+    _filename: str
+    _change_type: pydriller.ModificationType
+
+    @property
+    def change_type(self) -> pydriller.ModificationType:
+        return self._change_type
+
+    @property
+    def old_path(self) -> Optional[str]:
+        return None
+
+    @property
+    def new_path(self) -> Optional[str]:
+        return None
+
+
+@dataclass(frozen=True)
+class UnSquashedCommit(CommitProtocol):
+    _modified_files: list[ChangedFile]
+    _hash: str
+
+    @property
+    def modified_files(self) -> Sequence[ModifiedFileProtocol]:
+        return self._modified_files
+
+    @property
+    def hash(self) -> str:
+        return self._hash
 
 
 def singleton(function: Callable[P, T]) -> Callable[P, T]:
@@ -119,40 +151,16 @@ def get_squash_merges(
     )
 
 
-@dataclass(frozen=True)
-class ChangedFile:
-    _filename: str
-    _change_type: pydriller.ModificationType
+def transform_to_unsquashed_commit(commit: Commit) -> UnSquashedCommit:
+    """Analyzes the commit, by extracting the required infromation to
+    generate a UnSquashedCommit object that abides by the CommitProtocol
 
-    @property
-    def change_type(self) -> pydriller.ModificationType:
-        return self._change_type
+    Args:
+        commit (Commit): A commit object from PyGitHub
 
-    @property
-    def old_path(self) -> Optional[str]:
-        return None
-
-    @property
-    def new_path(self) -> Optional[str]:
-        return None
-
-
-@dataclass(frozen=True)
-class SquashedCommit:
-    _modified_files: list[ChangedFile]
-    _hash: str
-
-    @property
-    def modified_files(self) -> Sequence[ModifiedFileProtocol]:
-        return self._modified_files
-
-    @property
-    def hash(self) -> str:
-        return self._hash
-
-
-def analyze_commit(commit: Commit) -> SquashedCommit:
-    return SquashedCommit(
+    Returns (UnSquashedCommit): A UnSquashedCommit object
+    """
+    return UnSquashedCommit(
         _modified_files=[
             ChangedFile(
                 file.filename,
@@ -164,10 +172,12 @@ def analyze_commit(commit: Commit) -> SquashedCommit:
     )
 
 
-def expand_squash_merge(squash_merge: PullRequest) -> list[SquashedCommit]:
-    return list(map(analyze_commit, squash_merge.get_commits()))
+def expand_squash_merge(squash_merge: PullRequest) -> list[UnSquashedCommit]:
+    """Expands a squash merge by extracting all the commits that were squashed
 
+    Args:
+        squash_merge (PullRequest): A squash merged pull request
 
-if __name__ == "__main__":
-    with rich.progress.Progress() as progress:
-        get_squash_merges("apache", "kafka", progress)
+    Returns (list[UnSquashedCommit]): A list of UnSquashedCommit objects
+    """
+    return list(map(transform_to_unsquashed_commit, squash_merge.get_commits()))
