@@ -75,12 +75,14 @@ class TransactionBuilder:
     off the the algorithm provided in the lecture with a few modifications to account
     for merges"""
 
-    def __init__(self):
+    def __init__(self: Self):
         self._id_counter: FileNumber = FileNumber(0)
         self._id_map: dict[FileName, FileNumber] = dict()
         self._name_map: dict[FileNumber, list[FileName]] = dict()
         self._transactions: list[Commit] = []
-        self._mapping: dict[pydriller.ModificationType, Callable[[FileName], None]] = {
+        self._mapping: dict[
+            pydriller.ModificationType, Callable[[FileName], FileNumber]
+        ] = {
             pydriller.ModificationType.ADD: self._add,
             pydriller.ModificationType.COPY: self._copy,
             pydriller.ModificationType.DELETE: self._delete,
@@ -90,34 +92,35 @@ class TransactionBuilder:
         self._commit_number = 0
 
     def process(self, commit: list[FileChanges]) -> None:
-        items = []
+        items: list[FileNumber] = []
         for file in commit:
             modification_type = reverse_modification_map[file["modification_type"]]
             file_name: FileName = FileName(file["file"].strip())
-            items.append(self._mapping[modification_type](file_name))
+            self._mapping[modification_type](file_name)
         self._transactions.append(
             Commit(number=self._commit_number, files=sorted(items))
         )
         self._commit_number += 1
 
-    def _add(self, file_name: FileName) -> None:
+    def _add(self, file_name: FileName) -> FileNumber:
         assert file_name not in self._id_map
         self._id_counter = FileNumber(1 + self._id_counter)
         self._name_map[self._id_counter] = [file_name]
         self._id_map[file_name] = self._id_counter
+        return self._id_counter
 
-    def _delete(self, file_name: FileName) -> None:
+    def _delete(self, file_name: FileName) -> FileNumber:
         assert file_name in self._id_map
         self._id_counter = FileNumber(1 + self._id_counter)
-        idNum = self._id_map[file_name]
         del self._id_map[file_name]
+        return self._id_map[file_name]
 
-    def _modify(self, file_name: FileName) -> None:
+    def _modify(self, file_name: FileName) -> FileNumber:
         assert file_name in self._id_map
         self._id_counter = FileNumber(1 + self._id_counter)
-        idNum = self._id_map[file_name]
+        return self._id_map[file_name]
 
-    def _rename(self, file_name: FileName) -> None:
+    def _rename(self, file_name: FileName) -> FileNumber:
         oldId, newId = map(FileName, file_name.split("|"))
         assert oldId in self._id_map
         assert newId not in self._id_map
@@ -125,11 +128,13 @@ class TransactionBuilder:
         del self._id_map[oldId]
         self._name_map[idNum].append(newId)
         self._id_map[newId] = idNum
+        return idNum
 
-    def _copy(self, file_name: FileName) -> None:
+    def _copy(self, file_name: FileName) -> FileNumber:
         self._id_counter = FileNumber(1 + self._id_counter)
         self._id_map[file_name] = self._id_counter
         self._name_map[self._id_counter] = [file_name]
+        return self._id_counter
 
     def build(self) -> TransactionBuilderResult:
         return TransactionBuilderResult(
