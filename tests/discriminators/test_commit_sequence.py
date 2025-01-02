@@ -5,6 +5,7 @@ from pydriller import ModificationType as modification_type
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.strategy import BindingStrategy
+from src.discriminators.commit_seq_discriminator import CommitSequenceDiscriminator
 from src.discriminators.transaction import (
     Commit,
     FileNumber,
@@ -37,7 +38,7 @@ class MockTransactionLog(TransactionLog):
             for file, modification, plus_minus in commit_info:
                 commit.files[FileNumber(file_id)] = (modification, plus_minus)
                 if modification == modification_type.ADD:
-                    mapping.id_to_names[FileNumber(file_id)] = file.name
+                    mapping.id_to_names[FileNumber(file_id)] = [file.name]
                     file_id += 1
         return cls(mapping=mapping, transactions=transactions)
 
@@ -86,11 +87,11 @@ def generate(files, commit_list):
     return transactions, binding_strategy
 
 
-sourceA = SourceFile(FileName("A-source.java"), FileName("A-source.java"))
-sourceB = SourceFile(FileName("B-source.java"), FileName("B-source.java"))
-testAB = TestFile(FileName("AB-test.java"), FileName("AB-test.java"))
-testA = TestFile(FileName("A-test.java"), FileName("A-test.java"))
-testB = TestFile(FileName("B-test.java"), FileName("B-test.java"))
+sourceA = SourceFile(FileName(""), FileName("A-source.java"))
+sourceB = SourceFile(FileName(""), FileName("B-source.java"))
+testAB = TestFile(FileName(""), FileName("AB-test.java"))
+testA = TestFile(FileName(""), FileName("A-test.java"))
+testB = TestFile(FileName(""), FileName("B-test.java"))
 
 
 def test_mock_data():
@@ -109,11 +110,26 @@ def test_mock_data():
     ]
     transactions, binding_strategy = generate(files, commit_list)
     assert len(transactions.transactions.commits) == 3
+
     assert len(transactions.mapping.id_to_names) == 5
+    assert (
+        transactions.mapping.id_to_names[FileNumber(0)] == [sourceA.name]
+        or [sourceB.name]
+    ) and (
+        transactions.mapping.id_to_names[FileNumber(1)] == [sourceA.name]
+        or [sourceB.name]
+    ), "first commit is identified with 0-1"
+    assert (
+        transactions.mapping.id_to_names[FileNumber(2)] == [testAB.name] or [testA.name]
+    ) and (
+        transactions.mapping.id_to_names[FileNumber(3)] == [testAB.name] or [testA.name]
+    ), "second commit is identified with 2-4"
+    assert transactions.mapping.id_to_names[FileNumber(4)] == [testB.name]
     assert len(binding_strategy.source_files) == 2
-    assert len(binding_strategy.test_files) == 3
     assert binding_strategy.source_files == {sourceA, sourceB}
+    assert len(binding_strategy.test_files) == 3
     assert binding_strategy.test_files == {testAB, testA, testB}
+
     graph = binding_strategy.graph()
     assert graph.test_to_source_links[testAB] == {
         sourceA,
@@ -129,3 +145,24 @@ def test_mock_data():
         testAB,
         testB,
     }
+
+
+def test_run():
+    files = {sourceA, sourceB, testAB, testA, testB}
+    commit_list = [
+        {
+            (sourceA, modification_type.ADD, ()),
+            (sourceB, modification_type.ADD, ()),
+        },
+        {
+            (testAB, modification_type.ADD, ()),
+            (testA, modification_type.ADD, ()),
+            (sourceB, modification_type.MODIFY, (1, 2)),
+        },
+        {(testB, modification_type.ADD, ())},
+    ]
+    transactions, binding_strategy = generate(files, commit_list)
+    print(transactions.mapping.id_to_names)
+    print(transactions.mapping.name_to_id)
+    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    assert discriminator.statistics
