@@ -10,7 +10,7 @@ from git import Repo
 from urllib3 import request
 
 from src.discriminators.transaction import modification_map
-from src.squash_reverse import expand_squash_merge, get_squash_merges
+from src.squash_reverse import SquashedCommit, expand_squash_merge, get_squash_merges
 from src.types.commit import CommitProtocol, ModifiedFileProtocol
 
 
@@ -78,7 +78,7 @@ def get_repo_information(path: str) -> RemoteRepositoryInformation:
 
 
 def stiched_commits(
-    path: str, progress: rich.progress.Progress
+    path: str, progress: rich.progress.Progress, reverse_squash_merge: bool
 ) -> Generator[CommitProtocol, None, None]:
     """Expands squash merges into their individual commits and yields them
 
@@ -87,12 +87,15 @@ def stiched_commits(
 
     Returns (Generator[pydriller.Commit, None, None]): The commits in the repository
     """
-    squashes = get_squash_merges(*get_repo_information(path), progress=progress)
+    hash_to_commits: dict[str, list[SquashedCommit]] = {}
 
-    # preprocess to avoid undefined behaviour when doing it within the for loop
-    hash_to_commits = {
-        squash.merge_commit_sha: expand_squash_merge(squash) for squash in squashes
-    }
+    if reverse_squash_merge:
+        squashes = get_squash_merges(*get_repo_information(path), progress=progress)
+
+        # preprocess to avoid undefined behaviour when doing it within the for loop
+        hash_to_commits = {
+            squash.merge_commit_sha: expand_squash_merge(squash) for squash in squashes
+        }
 
     for commit in pydriller.Repository(path).traverse_commits():
         if commit.hash in hash_to_commits:
@@ -101,7 +104,11 @@ def stiched_commits(
 
 
 def drill_repository(
-    path: str, output_file: str, progress: rich.progress.Progress, delimiter: str = "|"
+    path: str,
+    output_file: str,
+    progress: rich.progress.Progress,
+    reverse_squash_merge: bool,
+    delimiter: str = "|",
 ) -> None:
     commit_count = get_commit_count(path)
     with open(output_file, "w") as f:
@@ -110,7 +117,7 @@ def drill_repository(
         )
         writer = csv.DictWriter(f, fieldnames=["hash", "file", "modification_type"])
         writer.writeheader()
-        for commit in stiched_commits(path, progress):
+        for commit in stiched_commits(path, progress, reverse_squash_merge):
             progress.advance(task)
             for file in commit.modified_files:
                 if file.change_type == pydriller.ModificationType.UNKNOWN:

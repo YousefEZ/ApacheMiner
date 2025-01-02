@@ -133,9 +133,10 @@ def drill(): ...
 @drill.command()
 @click.option("--url", "-u", type=str, required=True)
 @click.option("--output", "-o", type=str, required=True)
-def repository(url: str, output: str) -> None:
+@click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
+def repository(url: str, output: str, reverse_squash: bool) -> None:
     with rich.progress.Progress(console=console) as progress:
-        driller.drill_repository(url, output, progress)
+        driller.drill_repository(url, output, progress, reverse_squash)
 
 
 @drill.command()
@@ -148,9 +149,11 @@ def repository(url: str, output: str) -> None:
     help="match pattern followed by pattern e.g. %s outputs/commits_%s.csv",
     required=True,
 )
+@click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
 def repositories(
     input_file: str,
     output: tuple[str, str],
+    reverse_squash: bool,
 ) -> None:
     with open(input_file, "r") as f, rich.progress.Progress(
         rich.progress.SpinnerColumn(),
@@ -166,7 +169,10 @@ def repositories(
                 f"Drilling Repositories [{idx+1}/{len(rows)}]..."
             )
             driller.drill_repository(
-                row["repository"], output[1].replace(output[0], row["name"]), progress
+                row["repository"],
+                output[1].replace(output[0], row["name"]),
+                progress,
+                reverse_squash,
             )
 
 
