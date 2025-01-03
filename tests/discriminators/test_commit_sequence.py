@@ -42,27 +42,21 @@ class MockTransactionLog(TransactionLog):
             commit = Commit(number=i, files={})
             transactions.commits.append(commit)
             for file, modification in commit_info:
-                if isinstance(modification, tuple):
-                    print(file.name, modification)
-                    if modification[0] == modification_type.ADD:
-                        print(file.name, modification)
-                        mapping.id_to_names[FileNumber(file_id)] = [file.name]
-                        file_id += 1
-                    print(mapping.id_to_names, file.name, mapping.name_to_id, "\n")
+                if modification == modification_type.ADD:
+                    mapping.id_to_names[FileNumber(file_id)] = [file.name]
+                    commit.files[FileNumber(file_id)] = modification_type.ADD
+                    file_id += 1
+                elif (
+                    isinstance(modification, tuple)
+                    and modification[0] == modification_type.MODIFY
+                ):
                     commit.files[mapping.name_to_id[file.name]] = (
                         modification[0],
                         modification[1],
                         modification[2],
                     )
                 else:
-                    print(modification)
-                    if modification == modification_type.ADD:
-                        mapping.id_to_names[FileNumber(file_id)] = [file.name]
-                        commit.files[FileNumber(file_id)] = modification_type.ADD
-                        file_id += 1
-                    else:
-                        print(mapping.id_to_names)
-                        commit.files[mapping.name_to_id[file.name]] = modification
+                    commit.files[mapping.name_to_id[file.name]] = modification
         return cls(mapping=mapping, transactions=transactions)
 
 
@@ -193,11 +187,11 @@ def test_found_tfd_split_commits():
         {
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
         },
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
@@ -238,9 +232,9 @@ def test_found_tfd_same_commits():
         {
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
         },
     ]
     transactions, binding_strategy = generate(files, commit_list)
@@ -275,12 +269,12 @@ def test_failed_tfd():
     # base case
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
         },
         {
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
         },
     ]
@@ -293,10 +287,10 @@ def test_failed_tfd():
     # source commited without test
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
         },
         {
@@ -333,20 +327,16 @@ def test_only_one_testfile_change_needed():
     files = {sourceA, testA, testAB, sourceB}
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
             (
                 testAB,
-                (
-                    modification_type.ADD,
-                    frozenset({"method"}),
-                    frozenset({"A-source", "B-source"}),
-                ),
+                modification_type.ADD,
             ),
-            (sourceB, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceB, modification_type.ADD),
         },
         {
             (
@@ -379,20 +369,13 @@ def test_other_modification_types_not_counted():
     files = {sourceA, testA, testAB, sourceB}
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
-            (
-                testAB,
-                (
-                    modification_type.ADD,
-                    frozenset({"method"}),
-                    frozenset({"A-source", "B-source"}),
-                ),
-            ),
-            (sourceB, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (testAB, modification_type.ADD),
+            (sourceB, modification_type.ADD),
         },
     ]
     different_modification_type = [
@@ -430,20 +413,16 @@ def test_non_feature_additive_changes_not_counted():
     files = {sourceA, testA, testAB, sourceB}
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
             (
                 testAB,
-                (
-                    modification_type.ADD,
-                    frozenset({"method"}),
-                    frozenset({"A-source", "B-source"}),
-                ),
+                modification_type.ADD,
             ),
-            (sourceB, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceB, modification_type.ADD),
         },
     ]
     modify_without_new_features = [
@@ -481,20 +460,16 @@ def test_test_other_source_not_counted():
     files = {sourceA, testA, testAB, sourceB}
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
             (
                 testAB,
-                (
-                    modification_type.ADD,
-                    frozenset({"method"}),
-                    frozenset({"A-source", "B-source"}),
-                ),
+                modification_type.ADD,
             ),
-            (sourceB, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceB, modification_type.ADD),
         },
     ]
     new_feature_for_other_file = [
@@ -522,6 +497,7 @@ def test_test_other_source_not_counted():
         if stats.source == sourceA:
             stats_sourceA = stats
             break
+    print(stats_sourceA.changed_tests_per_commit)
     assert not stats_sourceA.is_tfd
     assert len(stats_sourceA.changed_tests_per_commit) == 2
     assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
@@ -532,10 +508,10 @@ def test_end_when_file_deleted():
     files = {sourceA, testA}
     commit_list = [
         {
-            (sourceA, (modification_type.ADD, frozenset({"method"}), frozenset())),
+            (sourceA, modification_type.ADD),
             (
                 testA,
-                (modification_type.ADD, frozenset({"method"}), frozenset({"A-source"})),
+                modification_type.ADD,
             ),
         },
         {

@@ -13,7 +13,6 @@ from .discriminator import Discriminator, Statistics
 from .transaction import Commit, TransactionLog
 
 console = rich.console.Console()
-LENIENCY = 0
 
 
 @dataclass(frozen=True)
@@ -23,11 +22,8 @@ class Stats:
 
     @cached_property
     def is_tfd(self) -> bool:
-        leniency_counter = 0
         for changed_tests in self.changed_tests_per_commit:
             if len(changed_tests) == 0:
-                leniency_counter += 1
-            if leniency_counter > LENIENCY:
                 return False
         return True
 
@@ -62,6 +58,8 @@ class CommitSequenceDiscriminator(Discriminator):
     file_binder: BindingStrategy
 
     def adds_features(self, commit_info) -> bool:
+        if commit_info == ModificationType.ADD:
+            return True
         if commit_info is None:
             return False  # no change
         if not isinstance(commit_info, tuple):
@@ -94,9 +92,13 @@ class CommitSequenceDiscriminator(Discriminator):
                 if test_id in commit.files and self.adds_features(
                     commit.files[test_id]
                 ):
-                    if source_name in commit.files[test_id][2]:
+                    if isinstance(commit.files[test_id], tuple):
+                        if source_name in commit.files[test_id][2]:
+                            hits[test_file].append(commit.number)
+                            # test file updated with new methods and calls to source
+                    else:
                         hits[test_file].append(commit.number)
-                        # test file updated with new methods and calls to source_file
+                        # relevant test file ADDED
         return hits
 
     @property
