@@ -103,6 +103,8 @@ class TransactionLog(BaseModel):
             for file in commit.files:
                 if file not in removed_ids:
                     new_files[file] = commit.files[file]
+            if len(new_files) == 0:
+                continue
 
             commits.append(Commit(number=commit_id, files=new_files))
             commit_id += 1
