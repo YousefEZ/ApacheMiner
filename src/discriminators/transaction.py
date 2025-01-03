@@ -93,12 +93,16 @@ class TransactionLog(BaseModel):
         commit_id = 0
         commits: list[Commit] = []
         for commit in self.transactions.commits:
-            new_files: dict[FileNumber, pydriller.ModificationType] = {}
+            new_files: dict[
+                FileNumber,
+                (
+                    tuple[pydriller.ModificationType, set[str], set[str]]
+                    | pydriller.ModificationType
+                ),
+            ] = {}
             for file in commit.files:
                 if file not in removed_ids:
                     new_files[file] = commit.files[file]
-            if not new_files:
-                continue
 
             commits.append(Commit(number=commit_id, files=new_files))
             commit_id += 1
@@ -134,7 +138,13 @@ class TransactionLog(BaseModel):
         for commit_hash, commit in commits:
             commit_number += 1
             group: list[dict[str, str]] = list(commit)
-            changes: dict[FileNumber, pydriller.ModificationType] = dict()
+            changes: dict[
+                FileNumber,
+                (
+                    tuple[pydriller.ModificationType, set[str], set[str]]
+                    | pydriller.ModificationType
+                ),
+            ] = {}
             for change in group:
                 modification_type = reverse_modification_map[
                     change["modification_type"]

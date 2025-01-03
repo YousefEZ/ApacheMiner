@@ -99,8 +99,8 @@ def format_file(file: pydriller.ModifiedFile, delimiter: str = "|") -> str:
         assert file.old_path
         return file.old_path
     elif (
-        file.change_type == pydriller.ModificationType.COPY
-        or file.change_type == pydriller.ModificationType.ADD
+        file.change_type == pydriller.ModificationType.ADD
+        or file.change_type == pydriller.ModificationType.COPY
     ):
         assert file.new_path
         return file.new_path
