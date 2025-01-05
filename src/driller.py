@@ -65,10 +65,10 @@ def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
         file.change_type == pydriller.ModificationType.ADD
         or file.change_type == pydriller.ModificationType.COPY
         or file.change_type == pydriller.ModificationType.MODIFY
+        or file.change_type == pydriller.ModificationType.UNKNOWN
     ):
         assert file.new_path
         return file.new_path
-
     assert False, f"Unknown change type: {file.change_type}"
 
 
@@ -128,11 +128,18 @@ def drill_repository(
         writer.writeheader()
         for commit in stiched_commits(path, progress, reverse_squash_merge):
             progress.advance(task)
-            for file in commit.modified_files:
-                if file.change_type == pydriller.ModificationType.UNKNOWN:
-                    # this is persmission changes
-                    continue
 
+            if not commit.modified_files:
+                writer.writerow(
+                    {
+                        "hash": commit.hash,
+                        "parents": delimiter.join(commit.parents),
+                        "file": "",
+                        "modification_type": "",
+                    }
+                )
+
+            for file in commit.modified_files:
                 writer.writerow(
                     {
                         "hash": commit.hash,
