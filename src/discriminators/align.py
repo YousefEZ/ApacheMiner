@@ -61,11 +61,12 @@ class CommitAligner:
 
     def _make_main_branch(self, commits: list[tuple[str, list[FileChanges]]]) -> Branch:
         """Creates a branch from the commits given, assuming all the commits
-        eventually lead to the commit containing 0 parents to the last commit that contains
-        no children
+        eventually lead to the commit containing 0 parents to the last commit that
+        contains no children
 
         Args:
-            commits (list[tuple[str, list[FileChanges]]]): The commits to create the branch from
+            commits (list[tuple[str, list[FileChanges]]]): The commits to create
+                    the branch from
 
         Returns (Branch): The branch created from the commits given
         """
@@ -175,8 +176,8 @@ class CommitAligner:
 
     def __iter__(self) -> Iterator[list[FileChanges]]:
         """Converts the branches into rows of FileChanges"""
-        rows = []
-        current_node = self._main_branch.tail
+        rows: list[list[FileChanges]] = []
+        current_node: Optional[CommitNode] = self._main_branch.tail
         while current_node is not None:
             rows.append(current_node.changes)
             current_node = current_node.parents[0] if current_node.parents else None
