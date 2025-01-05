@@ -1,7 +1,8 @@
+import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Generator, Optional, override
+from typing import Optional, override
 
 import rich.progress
 
@@ -19,14 +20,15 @@ class ImportStrategy(BindingStrategy):
 
     @staticmethod
     def import_name_of(java_file: ProgramFile) -> str:
-        directories = java_file.abs_path.split(os.path.sep)
-        for idx, subdirectory in enumerate(directories, start=1):
-            if subdirectory == "java":
-                break
-        else:
-            raise ValueError(f"Cannot find java directory in {java_file.abs_path}")
-
-        return ".".join(directories[idx:]).replace(".java", "")
+        with open(java_file.abs_path, "r") as file:
+            while line := file.readline():
+                if "package" in line:
+                    return (
+                        line.replace("package ", "").replace(";", "").strip()
+                        + "."
+                        + java_file.name.replace(".java", "")
+                    )
+        raise ValueError(f"Cannot find package name in {java_file.abs_path}")
 
     @lru_cache
     def fetch_import_names(self, java_file: ProgramFile) -> set[str]:
@@ -41,30 +43,29 @@ class ImportStrategy(BindingStrategy):
     @lru_cache
     def fetch_links(self, java_file: ProgramFile) -> set[SourceFile]:
         links: set[SourceFile] = set()
-        for source_file in self.repository.files[java_file.project].source_files:
+        for source_file in self.repository.files.source_files:
             if self.import_name_of(source_file) in self.fetch_import_names(java_file):
                 links.add(source_file)
         return links
 
-    def _graph_generator(self) -> Generator[Graph, None, None]:
-        for i, files in enumerate(self.repository.files.values()):
-            links = {
-                test_file: self.fetch_links(test_file)
-                for test_file in rich.progress.track(
-                    files.test_files, f"Creating links #{i}..."
-                )
-            }
-            yield Graph(
-                source_files=files.source_files,
-                test_files=files.test_files,
-                links=links,
-            )
-
     def graph(self) -> Graph:
-        graph = Graph()
-        for subgraph in self._graph_generator():
-            graph.combine(subgraph)
-        return graph
+        files = self.repository.files
+        links = {
+            test_file: self.fetch_links(test_file)
+            for test_file in rich.progress.track(files.test_files, "Creating links...")
+        }
+
+        logging.info(
+            "Unable to find links for the following files:"
+            + os.linesep
+            + os.linesep.join([str(file) for file, link in links.items() if not link])
+        )
+
+        return Graph(
+            source_files=files.source_files,
+            test_files=files.test_files,
+            links=links,
+        )
 
 
 class RecursiveImportStrategy(ImportStrategy):
