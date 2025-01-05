@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import itertools
 import operator
-from dataclasses import dataclass
 from functools import cached_property
-from typing import Callable, Iterator, NamedTuple, NewType, Optional, Self, TypedDict
+from typing import Callable, NamedTuple, Optional, Self
 
 import pydriller
 from pydantic import BaseModel
 
+from src.discriminators.align import CommitAligner
 from src.discriminators.binding.file_types import FileName
-
-FileNumber = NewType("FileNumber", int)
+from src.discriminators.types import FileChanges, FileNumber
 
 modification_map: dict[pydriller.ModificationType, str] = {
     pydriller.ModificationType.ADD: "A",
@@ -19,6 +18,7 @@ modification_map: dict[pydriller.ModificationType, str] = {
     pydriller.ModificationType.DELETE: "D",
     pydriller.ModificationType.MODIFY: "M",
     pydriller.ModificationType.RENAME: "R",
+    pydriller.ModificationType.UNKNOWN: "U",
 }
 
 
@@ -54,169 +54,9 @@ class Transactions(BaseModel):
         return None
 
 
-class SerializedTransactionLog(TypedDict):
-    transactions: str
-    mapping: str
-
-
-class FileChanges(TypedDict):
-    hash: str
-    modification_type: str
-    file: str
-    parents: str
-
-
 class TransactionBuilderResult(NamedTuple):
     transactions: Transactions
     mapping: TransactionMap
-
-
-@dataclass
-class CommitNode:
-    hash: str
-    changes: list[FileChanges]
-    parents: list[Self]
-
-
-@dataclass(frozen=True)
-class Branch:
-    head: CommitNode
-    tail: CommitNode
-
-    @cached_property
-    def commits(self) -> set[str]:
-        node = self.tail
-        commits = set()
-        while node.hash != self.head.hash:
-            commits.add(node.hash)
-            node = node.parents[0]
-        return commits
-
-
-class CommitAligner:
-    """
-    Inlines the branches into the main branch, so that the main branch
-    contains all the changes from the other branches. This is done by
-    tracing the path back to the main branch and then stitching the branch
-    into the main branch. So that the main branch has no branches and all
-    commits are ordered in terms of when they were commited into the main
-    branch
-
-    Example:
-
-               F-------->G-------->H
-               ^                   |
-               |                   |
-        B----->C----->D---->E      |
-        ^                   |      |
-        |                   v      v
-        W-------->X-------->Y----->Z
-
-
-        becomes W-->X-->B-->C-->D-->E-->Y-->F-->G-->H-->Z
-    """
-
-    def __init__(self, changes: list[tuple[str, list[FileChanges]]]):
-        self._changes = changes
-        self._main_branch = self._make_main_branch(self._changes)
-        self._inline_branches()
-
-    def _make_main_branch(self, commits: list[tuple[str, list[FileChanges]]]) -> Branch:
-        nodes: dict[str, CommitNode] = dict()
-
-        for commit_hash, commit in commits:
-            changes: list[FileChanges] = list(commit)
-            parents = [nodes[parent] for parent in changes[0]["parents"].split(",")]
-            nodes[commit_hash] = CommitNode(
-                hash=commit_hash, changes=changes, parents=parents
-            )
-
-        return Branch(head=nodes[commits[0][0]], tail=nodes[commits[-1][0]])
-
-    def _trace_path_back_to_main(self, tail: CommitNode) -> Branch:
-        """Traces the path back to the main branch
-
-        Args:
-            tail (CommitNode): The tail of the branch to trace back to main
-
-        Returns (Branch): The branch that was traced back to main
-
-        Example:
-
-            B----->C----->D---->E
-            ^                   |
-            |                   v
-            W-------->X-------->Y----->Z
-
-            Where E is the arg tail then the result is a branch with the head
-            at B and the tail at E
-        """
-        node = tail
-        while node.parents[0].hash not in self._main_branch.commits:
-            node = node.parents[0]
-        return Branch(node, tail)
-
-    def _stitch_path(self, node: CommitNode, path: Branch, visited: set[str]) -> Branch:
-        """Stitches the branch into the node given
-
-
-        Example:
-
-            B----->C----->D---->E
-            ^                   |
-            |                   V
-            W-------->X-------->Y----->Z
-
-            Attaching the path B-->C-->D-->E results in
-
-
-            W-->X-->B-->C-->D-->E-->Y-->Z
-        """
-        branch_node = path.tail
-        branch_node_previous = node
-        while branch_node.hash not in visited:
-            branch_node_previous = branch_node
-            branch_node = branch_node.parents[0]
-
-        # make the start of the branch have the parent of the merge
-        branch_node_previous.parents[0] = node.parents[0]
-
-        # Removing the main branch parent and replacing it with branch tail
-        node.parents = [path.tail]
-
-        return Branch(node, path.tail)
-
-    def _inline_branches(self):
-        """Inlines the branches by finding each merge commit, tracing the path
-        back to where it checks out from main, and stitching the branch.
-        After stitching it goes back to start of the branch and finds the next
-        merge commit, therefore any branching off the branch is also inlined
-        """
-        visited = set()
-        current_node = self._main_branch.head
-        while current_node is not None:
-            visited.add(current_node.hash)
-            if len(current_node.parents) != 2:
-                # we only want the merge commits
-                continue
-
-            path = self._trace_path_back_to_main(current_node.parents[1])
-
-            stitched_branch = self._stitch_path(current_node, path, visited)
-            visited.update(stitched_branch.commits)
-
-            # go back to the start of the branch
-            current_node = stitched_branch.head
-
-    def __iter__(self) -> Iterator[list[FileChanges]]:
-        """Converts the branches into rows of FileChanges"""
-        rows = []
-        current_node = self._main_branch.tail
-        while current_node is not None:
-            for change in current_node.changes:
-                rows.append(change)
-            current_node = current_node.parents[0] if current_node.parents else None
-        return reversed(rows)
 
 
 class TransactionBuilder:
@@ -230,26 +70,35 @@ class TransactionBuilder:
         self._name_map: dict[FileNumber, list[FileName]] = dict()
         self._transactions: list[Commit] = []
         self._mapping: dict[
-            pydriller.ModificationType, Callable[[FileName], FileNumber]
+            pydriller.ModificationType, Callable[[FileName], Optional[FileNumber]]
         ] = {
             pydriller.ModificationType.ADD: self._add,
             pydriller.ModificationType.COPY: self._copy,
             pydriller.ModificationType.DELETE: self._delete,
             pydriller.ModificationType.MODIFY: self._modify,
             pydriller.ModificationType.RENAME: self._rename,
+            pydriller.ModificationType.UNKNOWN: self._unknown,
         }
         self._commit_number = 0
 
     def process(self, commit: list[FileChanges]) -> None:
         items: list[FileNumber] = []
         for file in commit:
+            if not file["file"]:
+                continue  # empty commit
+
             modification_type = reverse_modification_map[file["modification_type"]]
             file_name: FileName = FileName(file["file"].strip())
-            self._mapping[modification_type](file_name)
+            item = self._mapping[modification_type](file_name)
+            if item:
+                items.append(item)
         self._transactions.append(
             Commit(number=self._commit_number, files=sorted(items))
         )
         self._commit_number += 1
+
+    def _unknown(self, _: FileName) -> None:
+        return None
 
     def _add(self, file_name: FileName) -> FileNumber:
         assert file_name not in self._id_map
@@ -261,8 +110,9 @@ class TransactionBuilder:
     def _delete(self, file_name: FileName) -> FileNumber:
         assert file_name in self._id_map
         self._id_counter = FileNumber(1 + self._id_counter)
+        id_number = self._id_map[file_name]
         del self._id_map[file_name]
-        return self._id_map[file_name]
+        return id_number
 
     def _modify(self, file_name: FileName) -> FileNumber:
         assert file_name in self._id_map
@@ -281,8 +131,8 @@ class TransactionBuilder:
 
     def _copy(self, file_name: FileName) -> FileNumber:
         self._id_counter = FileNumber(1 + self._id_counter)
-        self._id_map[file_name] = self._id_counter
         self._name_map[self._id_counter] = [file_name]
+        self._id_map[file_name] = self._id_counter
         return self._id_counter
 
     def build(self) -> TransactionBuilderResult:
@@ -333,81 +183,15 @@ class TransactionLog(BaseModel):
         )
 
     @classmethod
-    def from_commit_data(cls, rows: list[dict[str, str]]) -> Self:
-        """Parses the rows of dict[col, val] to provide a TransactionLog
-
-        Args:
-            rows (list[dict[str, str]]): The rows of data to parse
-
-        Return TransactionLog: The parsed transaction log
-        """
-        commits = itertools.groupby(rows, operator.itemgetter("hash"))
-
-        id_counter: FileNumber = FileNumber(0)
-        id_map: dict[FileName, FileNumber] = dict()
-        name_map: dict[FileNumber, list[FileName]] = dict()
-        transactions: list[Commit] = []
-
-        commit_number = -1
-        for commit_hash, commit in commits:
-            commit_number += 1
-            group: list[dict[str, str]] = list(commit)
-            items: list[FileNumber] = []
-            for change in group:
-                modification_type = reverse_modification_map[
-                    change["modification_type"]
-                ]
-
-                file_name: FileName = FileName(change["file"].strip())
-
-                if (
-                    modification_type == pydriller.ModificationType.ADD
-                    or modification_type == pydriller.ModificationType.COPY
-                ):
-                    assert file_name not in id_map
-                    id_counter = FileNumber(1 + id_counter)
-                    name_map[id_counter] = [file_name]
-                    id_map[file_name] = id_counter
-                    idNum = id_counter
-                    items.append(idNum)
-                elif modification_type == pydriller.ModificationType.DELETE:
-                    assert file_name in id_map
-                    id_counter = FileNumber(1 + id_counter)
-                    idNum = id_map[file_name]
-                    del id_map[file_name]
-                    items.append(idNum)
-                elif modification_type == pydriller.ModificationType.MODIFY:
-                    assert file_name in id_map
-                    id_counter = FileNumber(1 + id_counter)
-                    idNum = id_map[file_name]
-                    items.append(idNum)
-                elif modification_type == pydriller.ModificationType.RENAME:
-                    oldId, newId = map(FileName, change["file"].split("|"))
-                    assert oldId in id_map
-                    assert newId not in id_map
-                    idNum = id_map[oldId]
-                    del id_map[oldId]
-                    name_map[idNum].append(newId)
-                    id_map[newId] = idNum
-                    items.append(idNum)
-
-            transactions.append(Commit(number=commit_number, files=sorted(items)))
-
-        return cls(
-            transactions=Transactions(commits=transactions),
-            mapping=TransactionMap(id_to_names=name_map),
-        )
-
-    @classmethod
     def aligned_commit_log(cls, rows: list[FileChanges]) -> Self:
         commits = itertools.groupby(rows, operator.itemgetter("hash"))
         aligner = CommitAligner(
             [(commit, list(changes)) for commit, changes in commits]
         )
-        return cls.new_from_commit_data(list(aligner))
+        return cls.build_transactions_from_groups(list(aligner))
 
     @classmethod
-    def new_from_commit_data(cls, commits: list[list[FileChanges]]) -> Self:
+    def build_transactions_from_groups(cls, commits: list[list[FileChanges]]) -> Self:
         builder = TransactionBuilder()
         for changes in commits:
             builder.process(changes)
@@ -416,11 +200,8 @@ class TransactionLog(BaseModel):
         return cls(transactions=result.transactions, mapping=result.mapping)
 
     @classmethod
-    def new_from_rows(cls, rows: list[FileChanges]) -> Self:
+    def from_commit_log(cls, rows: list[FileChanges]) -> Self:
         commits = itertools.groupby(rows, operator.itemgetter("hash"))
-        builder = TransactionBuilder()
-        for _, commit in commits:
-            builder.process(list(commit))
-
-        result = builder.build()
-        return cls(transactions=result.transactions, mapping=result.mapping)
+        return cls.build_transactions_from_groups(
+            [list(changes) for _, changes in commits]
+        )
