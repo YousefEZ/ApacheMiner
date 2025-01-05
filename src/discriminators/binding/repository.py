@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Generator, NamedTuple, Protocol, Type, TypeVar
+from typing import Generator, NamedTuple, Protocol, TypeVar
 
 from src.discriminators.binding.file_types import ProgramFile, SourceFile, TestFile
 
@@ -16,7 +16,7 @@ T = TypeVar("T", bound=ProgramFile)
 
 class Repository(Protocol):
     @cached_property
-    def files(self) -> dict[str, Files]: ...
+    def files(self) -> Files: ...
 
 
 class Files(NamedTuple):
@@ -34,54 +34,34 @@ def _all_files_in_directory(directory: str) -> Generator[str, None, None]:
 
 
 @dataclass(frozen=True)
-class JavaSubProject:
-    path: str
-
-    @staticmethod
-    def is_project(path: str) -> bool:
-        return all(
-            os.path.exists(os.path.join(path, sub_path))
-            for sub_path in (SOURCE_DIR, TEST_DIR)
-        )
-
-    def _fetch_files_from_directory(
-        self, file_type: Type[T], subdirectory: str
-    ) -> set[T]:
-        return {
-            file_type(
-                project=self.path,
-                path=path.replace(f"{self.path}/", ""),
-            )
-            for path in _all_files_in_directory(os.path.join(self.path, subdirectory))
-        }
-
-    @cached_property
-    def tests(self) -> set[TestFile]:
-        return self._fetch_files_from_directory(TestFile, TEST_DIR)
-
-    @cached_property
-    def source_files(self) -> set[SourceFile]:
-        return self._fetch_files_from_directory(SourceFile, SOURCE_DIR)
-
-
-@dataclass(frozen=True)
 class JavaRepository(Repository):
     root: str
 
     @cached_property
-    def subprojects(self) -> set[JavaSubProject]:
+    def all_files(self) -> set[ProgramFile]:
+        return set(
+            ProgramFile(project=self.root, path=path.replace(f"{self.root}/", ""))
+            for path in _all_files_in_directory(self.root)
+        )
+
+    @cached_property
+    def source_files(self) -> set[SourceFile]:
         return {
-            JavaSubProject(os.path.join(self.root, path))
-            for path in os.listdir(self.root)
-            if JavaSubProject.is_project(os.path.join(self.root, path))
+            SourceFile(project=file.project, path=file.path)
+            for file in self.all_files - self.tests
+        }
+
+    def is_test(self, file: ProgramFile) -> bool:
+        with open(os.path.join(file.project, file.path)) as f:
+            return "@Test" in f.read()
+
+    @cached_property
+    def tests(self) -> set[TestFile]:
+        return {
+            TestFile(project=file.project, path=file.path)
+            for file in filter(self.is_test, self.all_files)
         }
 
     @cached_property
-    def files(self) -> dict[str, Files]:
-        return {
-            project.path: Files(
-                project.source_files,
-                project.tests,
-            )
-            for project in self.subprojects
-        }
+    def files(self) -> Files:
+        return Files(source_files=self.source_files, test_files=self.tests)
