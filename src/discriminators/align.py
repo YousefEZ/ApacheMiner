@@ -118,8 +118,17 @@ class CommitAligner:
         return Branch(node, tail)
 
     def _stitch_path(self, node: CommitNode, path: Branch, visited: set[str]) -> Branch:
-        """Stitches the branch into the node given
+        """Stitches the branch into the node given. It does this by finding the
+        earliest node in the branch that is not in the visited, and treats it as the
+        start of the branch
 
+        Args:
+            node (CommitNode): The node to stitch the branch into
+            path (Branch): The branch to stitch into the node
+            visited (set[str]): The set of already visited nodes
+
+        Returns (Branch): an instance that contains the start of the stitched path and
+            the tail of that path being the node.
 
         Example:
 
@@ -128,10 +137,7 @@ class CommitAligner:
             |                   V
             W-------->X-------->Y----->Z
 
-            Attaching the path B-->C-->D-->E results in
-
-
-            W-->X-->B-->C-->D-->E-->Y-->Z
+            Attaching the path B-->C-->D-->E results in W-->X-->B-->C-->D-->E-->Y-->Z
         """
         branch_node = path.tail
         branch_node_previous = node
@@ -148,7 +154,7 @@ class CommitAligner:
         self._predecessor[node.hash] = path.tail
         self._predecessor[branch_node_previous.hash] = node.parents[0]
 
-        return Branch(node, path.tail)
+        return Branch(branch_node_previous, node)
 
     def _inline_branches(self):
         """Inlines the branches by finding each merge commit, tracing the path
