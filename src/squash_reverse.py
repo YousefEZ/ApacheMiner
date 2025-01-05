@@ -19,9 +19,6 @@ from src.types.commit import CommitProtocol, ModifiedFileProtocol
 
 __all__ = ("get_squash_merges", "expand_squash_merge")
 
-load_dotenv()
-
-TOKEN = os.getenv("GITHUB_TOKEN")
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -106,7 +103,11 @@ def get_github() -> Github:
 
     Returns (Github): A Github object
     """
-    assert TOKEN is not None
+    load_dotenv()
+
+    TOKEN = os.getenv("GITHUB_TOKEN")
+    assert TOKEN is not None, "GITHUB_TOKEN environment variable is not set"
+
     return Github(
         auth=Auth.Token(TOKEN),
         per_page=100,
