@@ -5,7 +5,7 @@ from typing import Iterable
 import hypothesis
 import hypothesis.strategies
 
-from src.github import (
+from src.github_scraper import (
     CUSTOM_ATTRIBUTE,
     TITLE_DATA_TEST_ID,
     next_page,

@@ -3,14 +3,14 @@ from __future__ import annotations
 import itertools
 import operator
 from functools import cached_property
-from typing import Callable, NewType, Optional, Self, TypedDict
+from typing import Callable, NamedTuple, Optional, Self
 
 import pydriller
 from pydantic import BaseModel
 
+from src.discriminators.align import CommitAligner
 from src.discriminators.binding.file_types import FileName
-
-FileNumber = NewType("FileNumber", int)
+from src.discriminators.types import FileChanges, FileNumber
 
 modification_map: dict[pydriller.ModificationType, str] = {
     pydriller.ModificationType.ADD: "A",
@@ -18,6 +18,7 @@ modification_map: dict[pydriller.ModificationType, str] = {
     pydriller.ModificationType.DELETE: "D",
     pydriller.ModificationType.MODIFY: "M",
     pydriller.ModificationType.RENAME: "R",
+    pydriller.ModificationType.UNKNOWN: "U",
 }
 
 
@@ -53,9 +54,92 @@ class Transactions(BaseModel):
         return None
 
 
-class SerializedTransactionLog(TypedDict):
-    transactions: str
-    mapping: str
+class TransactionBuilderResult(NamedTuple):
+    transactions: Transactions
+    mapping: TransactionMap
+
+
+class TransactionBuilder:
+    """A class to build a TransactionLog from a list of FileChanges, which is based
+    off the the algorithm provided in the lecture with a few modifications to account
+    for merges"""
+
+    def __init__(self: Self):
+        self._id_counter: FileNumber = FileNumber(0)
+        self._id_map: dict[FileName, FileNumber] = dict()
+        self._name_map: dict[FileNumber, list[FileName]] = dict()
+        self._transactions: list[Commit] = []
+        self._mapping: dict[
+            pydriller.ModificationType, Callable[[FileName], Optional[FileNumber]]
+        ] = {
+            pydriller.ModificationType.ADD: self._add,
+            pydriller.ModificationType.COPY: self._copy,
+            pydriller.ModificationType.DELETE: self._delete,
+            pydriller.ModificationType.MODIFY: self._modify,
+            pydriller.ModificationType.RENAME: self._rename,
+            pydriller.ModificationType.UNKNOWN: self._unknown,
+        }
+        self._commit_number = 0
+
+    def process(self, commit: list[FileChanges]) -> None:
+        items: list[FileNumber] = []
+        for file in commit:
+            if not file["file"]:
+                continue  # empty commit
+
+            modification_type = reverse_modification_map[file["modification_type"]]
+            file_name: FileName = FileName(file["file"].strip())
+            item = self._mapping[modification_type](file_name)
+            if item:
+                items.append(item)
+        self._transactions.append(
+            Commit(number=self._commit_number, files=sorted(items))
+        )
+        self._commit_number += 1
+
+    def _unknown(self, _: FileName) -> None:
+        return None
+
+    def _add(self, file_name: FileName) -> FileNumber:
+        assert file_name not in self._id_map
+        self._id_counter = FileNumber(1 + self._id_counter)
+        self._name_map[self._id_counter] = [file_name]
+        self._id_map[file_name] = self._id_counter
+        return self._id_counter
+
+    def _delete(self, file_name: FileName) -> FileNumber:
+        assert file_name in self._id_map
+        self._id_counter = FileNumber(1 + self._id_counter)
+        id_number = self._id_map[file_name]
+        del self._id_map[file_name]
+        return id_number
+
+    def _modify(self, file_name: FileName) -> FileNumber:
+        assert file_name in self._id_map
+        self._id_counter = FileNumber(1 + self._id_counter)
+        return self._id_map[file_name]
+
+    def _rename(self, file_name: FileName) -> FileNumber:
+        oldId, newId = map(FileName, file_name.split("|"))
+        assert oldId in self._id_map
+        assert newId not in self._id_map
+        idNum = self._id_map[oldId]
+        del self._id_map[oldId]
+        self._name_map[idNum].append(newId)
+        self._id_map[newId] = idNum
+        return idNum
+
+    def _copy(self, file_name: FileName) -> FileNumber:
+        self._id_counter = FileNumber(1 + self._id_counter)
+        self._name_map[self._id_counter] = [file_name]
+        self._id_map[file_name] = self._id_counter
+        return self._id_counter
+
+    def build(self) -> TransactionBuilderResult:
+        return TransactionBuilderResult(
+            transactions=Transactions(commits=self._transactions),
+            mapping=TransactionMap(id_to_names=self._name_map),
+        )
 
 
 class TransactionLog(BaseModel):
@@ -99,67 +183,25 @@ class TransactionLog(BaseModel):
         )
 
     @classmethod
-    def from_commit_data(cls, rows: list[dict[str, str]]) -> Self:
-        """Parses the rows of dict[col, val] to provide a TransactionLog
-
-        Args:
-            rows (list[dict[str, str]]): The rows of data to parse
-
-        Return TransactionLog: The parsed transaction log
-        """
+    def aligned_commit_log(cls, rows: list[FileChanges]) -> Self:
         commits = itertools.groupby(rows, operator.itemgetter("hash"))
+        aligner = CommitAligner(
+            [(commit, list(changes)) for commit, changes in commits]
+        )
+        return cls.build_transactions_from_groups(list(aligner))
 
-        id_counter: FileNumber = FileNumber(0)
-        id_map: dict[FileName, FileNumber] = dict()
-        name_map: dict[FileNumber, list[FileName]] = dict()
-        transactions: list[Commit] = []
+    @classmethod
+    def build_transactions_from_groups(cls, commits: list[list[FileChanges]]) -> Self:
+        builder = TransactionBuilder()
+        for changes in commits:
+            builder.process(changes)
 
-        commit_number = -1
-        for commit_hash, commit in commits:
-            commit_number += 1
-            group: list[dict[str, str]] = list(commit)
-            items: list[FileNumber] = []
-            for change in group:
-                modification_type = reverse_modification_map[
-                    change["modification_type"]
-                ]
+        result = builder.build()
+        return cls(transactions=result.transactions, mapping=result.mapping)
 
-                file_name: FileName = FileName(change["file"].strip())
-
-                if (
-                    modification_type == pydriller.ModificationType.ADD
-                    or modification_type == pydriller.ModificationType.COPY
-                ):
-                    assert file_name not in id_map
-                    id_counter = FileNumber(1 + id_counter)
-                    name_map[id_counter] = [file_name]
-                    id_map[file_name] = id_counter
-                    idNum = id_counter
-                    items.append(idNum)
-                elif modification_type == pydriller.ModificationType.DELETE:
-                    assert file_name in id_map
-                    id_counter = FileNumber(1 + id_counter)
-                    idNum = id_map[file_name]
-                    del id_map[file_name]
-                    items.append(idNum)
-                elif modification_type == pydriller.ModificationType.MODIFY:
-                    assert file_name in id_map
-                    id_counter = FileNumber(1 + id_counter)
-                    idNum = id_map[file_name]
-                    items.append(idNum)
-                elif modification_type == pydriller.ModificationType.RENAME:
-                    oldId, newId = map(FileName, change["file"].split("|"))
-                    assert oldId in id_map
-                    assert newId not in id_map
-                    idNum = id_map[oldId]
-                    del id_map[oldId]
-                    name_map[idNum].append(newId)
-                    id_map[newId] = idNum
-                    items.append(idNum)
-
-            transactions.append(Commit(number=commit_number, files=sorted(items)))
-
-        return cls(
-            transactions=Transactions(commits=transactions),
-            mapping=TransactionMap(id_to_names=name_map),
+    @classmethod
+    def from_commit_log(cls, rows: list[FileChanges]) -> Self:
+        commits = itertools.groupby(rows, operator.itemgetter("hash"))
+        return cls.build_transactions_from_groups(
+            [list(changes) for _, changes in commits]
         )

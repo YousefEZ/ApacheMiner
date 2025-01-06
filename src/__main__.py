@@ -2,7 +2,7 @@ import csv
 import os
 import re
 import tempfile
-from typing import Optional, ParamSpec
+from typing import Optional, ParamSpec, cast
 
 import click
 import git
@@ -10,11 +10,12 @@ import rich.progress
 import rich.table
 import rich.theme
 
-from src import apache_list, driller, github
+from src import apache_list, driller, github_scraper
 from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
 from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
+from src.discriminators.types import FileChanges
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
 
@@ -110,7 +111,7 @@ def github_list(url: str, output: str):
         return
     with console.status(f":mag_right: Fetching GitHub Repository for {url}"):
         driver = generate_driver()
-        project_list = github.retrieve_project_list(url, driver)
+        project_list = github_scraper.retrieve_project_list(url, driver)
 
     console.print(f"Found [cyan]{len(project_list)}[/cyan] projects")
 
@@ -133,9 +134,10 @@ def drill(): ...
 @drill.command()
 @click.option("--url", "-u", type=str, required=True)
 @click.option("--output", "-o", type=str, required=True)
-def repository(url: str, output: str) -> None:
+@click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
+def repository(url: str, output: str, reverse_squash: bool) -> None:
     with rich.progress.Progress(console=console) as progress:
-        driller.drill_repository(url, output, progress)
+        driller.drill_repository(url, output, progress, reverse_squash)
 
 
 @drill.command()
@@ -148,9 +150,11 @@ def repository(url: str, output: str) -> None:
     help="match pattern followed by pattern e.g. %s outputs/commits_%s.csv",
     required=True,
 )
+@click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
 def repositories(
     input_file: str,
     output: tuple[str, str],
+    reverse_squash: bool,
 ) -> None:
     with open(input_file, "r") as f, rich.progress.Progress(
         rich.progress.SpinnerColumn(),
@@ -166,7 +170,10 @@ def repositories(
                 f"Drilling Repositories [{idx+1}/{len(rows)}]..."
             )
             driller.drill_repository(
-                row["repository"], output[1].replace(output[0], row["name"]), progress
+                row["repository"],
+                output[1].replace(output[0], row["name"]),
+                progress,
+                reverse_squash,
             )
 
 
@@ -174,10 +181,16 @@ def repositories(
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-def transform(_input_file: str, output: str, map_file: str) -> None:
+@click.option("--commit-aligned", "-c", is_flag=True, default=False)
+def transform(
+    _input_file: str, output: str, map_file: str, commit_aligned: bool
+) -> None:
     with open(_input_file, "r") as commit_file:
-        transaction_log = transaction.TransactionLog.from_commit_data(
-            list(csv.DictReader(commit_file))
+        data = cast(list[FileChanges], list(csv.DictReader(commit_file)))
+        transaction_log = (
+            transaction.TransactionLog.aligned_commit_log(data)
+            if commit_aligned
+            else transaction.TransactionLog.from_commit_log(data)
         )
     with open(output, "w") as transactions, open(map_file, "w") as mapping:
         transactions.write(transaction_log.transactions.model_dump_json(indent=2))
@@ -246,7 +259,15 @@ def association(
 @click.option(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
-def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Strategies):
+@click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
+@click.option("--commit-aligned", "-c", is_flag=True, default=False)
+def discriminate(
+    url: str,
+    discriminator_type: DiscriminatorTypes,
+    binding: Strategies,
+    reverse_squash: bool,
+    commit_aligned: bool,
+) -> None:
     with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
         OUTPUT_FILE = f"{dir}/dump.csv"
 
@@ -256,12 +277,15 @@ def discriminate(url: str, discriminator_type: DiscriminatorTypes, binding: Stra
         console.print("Repository cloned")
         console.print(f"Drilling repository from {dir}")
 
-        driller.drill_repository(dir, OUTPUT_FILE, progress)
+        driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
         console.print("Repository drilled")
 
         with open(OUTPUT_FILE, "r") as f:
-            transaction_log = transaction.TransactionLog.from_commit_data(
-                list(csv.DictReader(f))
+            data = cast(list[FileChanges], list(csv.DictReader(f)))
+            transaction_log = (
+                transaction.TransactionLog.aligned_commit_log(data)
+                if commit_aligned
+                else transaction.TransactionLog.from_commit_log(data)
             )
 
         progress.stop()
