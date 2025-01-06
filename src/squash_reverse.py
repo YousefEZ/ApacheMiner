@@ -59,6 +59,12 @@ class ChangedFile(ModifiedFileProtocol):
 
     @property
     def diff_parsed(self) -> dict[str, list[tuple[int, str]]]:
+        """This method is lifted from pydriller.ModifiedFile so that it achieves
+        parity
+
+
+        Returns (dict[str, list[tuple[int, str]]]): A dictionary with two keys:
+        """
         modified_lines: dict[str, list[tuple[int, str]]] = {
             "added": [],
             "deleted": [],
