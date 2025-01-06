@@ -81,7 +81,7 @@ class TransactionBuilder:
         }
         self._commit_number = 0
 
-    def process(self, commit: list[FileChanges]) -> None:
+    def process(self, commit: list[FileChanges]):
         items: list[FileNumber] = []
         for file in commit:
             if not file["file"]:
@@ -92,6 +92,8 @@ class TransactionBuilder:
             item = self._mapping[modification_type](file_name)
             if item:
                 items.append(item)
+        if not items:
+            return
         self._transactions.append(
             Commit(number=self._commit_number, files=sorted(items))
         )
@@ -101,7 +103,8 @@ class TransactionBuilder:
         return None
 
     def _add(self, file_name: FileName) -> FileNumber:
-        assert file_name not in self._id_map
+        if file_name in self._id_map:
+            return self._modify(file_name)
         self._id_counter = FileNumber(1 + self._id_counter)
         self._name_map[self._id_counter] = [file_name]
         self._id_map[file_name] = self._id_counter
@@ -109,22 +112,17 @@ class TransactionBuilder:
 
     def _delete(self, file_name: FileName) -> FileNumber:
         assert file_name in self._id_map
-        self._id_counter = FileNumber(1 + self._id_counter)
         id_number = self._id_map[file_name]
-        del self._id_map[file_name]
         return id_number
 
     def _modify(self, file_name: FileName) -> FileNumber:
         assert file_name in self._id_map
-        self._id_counter = FileNumber(1 + self._id_counter)
         return self._id_map[file_name]
 
     def _rename(self, file_name: FileName) -> FileNumber:
         oldId, newId = map(FileName, file_name.split("|"))
         assert oldId in self._id_map
-        assert newId not in self._id_map
         idNum = self._id_map[oldId]
-        del self._id_map[oldId]
         self._name_map[idNum].append(newId)
         self._id_map[newId] = idNum
         return idNum
