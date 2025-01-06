@@ -69,7 +69,7 @@ def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
     ):
         assert file.new_path
         return file.new_path
-    assert False, f"Unknown change type: {file.change_type}"
+    assert False, f"Unsupported change type: {file.change_type}"
 
 
 def get_repo_information(path: str) -> RemoteRepositoryInformation:
