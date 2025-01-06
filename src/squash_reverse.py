@@ -15,7 +15,7 @@ from github.PullRequest import PullRequest
 from github.Repository import Repository
 from pydriller import ModificationType
 
-from src.types.commit import CommitProtocol, ModifiedFileProtocol
+from src.custom_types.commit import CommitProtocol, ModifiedFileProtocol
 
 __all__ = ("get_squash_merges", "expand_squash_merge")
 
@@ -43,6 +43,7 @@ class ChangedFile(ModifiedFileProtocol):
     _change_type: pydriller.ModificationType
     _old_path: Optional[str]
     _new_path: Optional[str]
+    _patch: Optional[str] = None
 
     @property
     def change_type(self) -> pydriller.ModificationType:
@@ -56,6 +57,50 @@ class ChangedFile(ModifiedFileProtocol):
     def new_path(self) -> Optional[str]:
         return self._new_path
 
+    @property
+    def diff_parsed(self) -> dict[str, list[tuple[int, str]]]:
+        modified_lines: dict[str, list[tuple[int, str]]] = {
+            "added": [],
+            "deleted": [],
+        }
+        if not self._patch:
+            return modified_lines
+
+        lines = self._patch.split("\n")
+        count_deletions = 0
+        count_additions = 0
+
+        for line in lines:
+            line = line.rstrip()
+            count_deletions += 1
+            count_additions += 1
+
+            if line.startswith("@@"):
+                count_deletions, count_additions = self._get_line_numbers(line)
+
+            if line.startswith("-"):
+                modified_lines["deleted"].append((count_deletions, line[1:]))
+                count_additions -= 1
+
+            if line.startswith("+"):
+                modified_lines["added"].append((count_additions, line[1:]))
+                count_deletions -= 1
+
+            if line == r"\ No newline at end of file":
+                count_deletions -= 1
+                count_additions -= 1
+
+        return modified_lines
+
+    @staticmethod
+    def _get_line_numbers(line: str) -> tuple[int, int]:
+        token = line.split(" ")
+        numbers_old_file = token[1]
+        numbers_new_file = token[2]
+        delete_line_number = int(numbers_old_file.split(",")[0].replace("-", "")) - 1
+        additions_line_number = int(numbers_new_file.split(",")[0]) - 1
+        return delete_line_number, additions_line_number
+
 
 @dataclass(frozen=True)
 class UnSquashedCommit(CommitProtocol):
@@ -64,7 +109,7 @@ class UnSquashedCommit(CommitProtocol):
     _parents: list[str]
 
     @property
-    def modified_files(self) -> Sequence[ModifiedFileProtocol]:
+    def modified_files(self) -> Sequence[ChangedFile]:
         return self._modified_files
 
     @property
@@ -178,6 +223,9 @@ def convert_pygithub_file(file: File) -> ChangedFile:
         _change_type=change_type,
         _old_path=file.previous_filename,
         _new_path=file.filename,
+        _patch=(
+            file.patch if file.sha is not None else None
+        ),  # if permission change then no patch
     )
 
 
@@ -206,3 +254,16 @@ def expand_squash_merge(squash_merge: PullRequest) -> list[UnSquashedCommit]:
     Returns (list[UnSquashedCommit]): A list of UnSquashedCommit objects
     """
     return list(map(transform_to_unsquashed_commit, squash_merge.get_commits()))
+
+
+if __name__ == "__main__":
+    # fetch commit for
+    # apache/zookeeper/commits/b6f0e5d5e0baf59038ac4381229437607746069a
+    repo = get_repository("apache", "kafka")
+    commit = repo.get_commit("c7c1364b0f0e5f5da30b85cc6173ea52fc6d0008")
+    print(
+        [
+            file.diff_parsed
+            for file in transform_to_unsquashed_commit(commit).modified_files
+        ]
+    )
