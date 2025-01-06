@@ -9,9 +9,9 @@ from bs4 import BeautifulSoup
 from git import Repo
 from urllib3 import request
 
+from src.custom_types.commit import CommitProtocol, ModifiedFileProtocol
 from src.discriminators.transaction import modification_map
 from src.squash_reverse import expand_squash_merge, get_squash_merges
-from src.types.commit import CommitProtocol, ModifiedFileProtocol
 
 
 class RemoteRepositoryInformation(NamedTuple):
