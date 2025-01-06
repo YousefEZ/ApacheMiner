@@ -15,7 +15,7 @@ from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
 from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
-from src.discriminators.types import FileChanges
+from src.discriminators.file_types import FileChanges
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
 
