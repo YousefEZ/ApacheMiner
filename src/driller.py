@@ -108,10 +108,6 @@ def stiched_commits(
         if commit.hash in hash_to_commits:
             yield from hash_to_commits[commit.hash]
 
-        if commit.hash == "70c0ed88e2b9d8a7d3b5d545a7690b1012791381":
-            print(
-                f"Found commit {commit.hash}, files={[(file.change_type, file.filename) for file in commit.modified_files]}"
-            )
         yield commit
 
 
