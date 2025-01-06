@@ -13,6 +13,9 @@ class ModifiedFileProtocol(Protocol):
     @property
     def new_path(self) -> Optional[str]: ...
 
+    @property
+    def diff_parsed(self) -> dict[str, list[tuple[int, str]]]: ...
+
 
 class CommitProtocol(Protocol):
     @property
