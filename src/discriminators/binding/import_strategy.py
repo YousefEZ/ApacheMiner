@@ -19,15 +19,15 @@ class ImportStrategy(BindingStrategy):
     repository: Repository
 
     @staticmethod
+    @lru_cache
     def import_name_of(java_file: ProgramFile) -> str:
-        with open(java_file.abs_path, "r") as file:
-            while line := file.readline():
-                if "package" in line:
-                    return (
-                        line.replace("package ", "").replace(";", "").strip()
-                        + "."
-                        + java_file.name.replace(".java", "")
-                    )
+        for line in java_file.get_source_code():
+            if "package" in line:
+                return (
+                    line.replace("package ", "").replace(";", "").strip()
+                    + "."
+                    + java_file.name.replace(".java", "")
+                )
         raise ValueError(f"Cannot find package name in {java_file.abs_path}")
 
     @lru_cache
