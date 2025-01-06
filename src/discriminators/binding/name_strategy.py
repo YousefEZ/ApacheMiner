@@ -15,15 +15,11 @@ class NameStrategy(BindingStrategy):
     repository: Repository
 
     def graph(self) -> Graph:
-        base_names_tests = {
-            test_file.name: test_file
-            for files in self.repository.files.values()
-            for test_file in files.test_files
-        }
+        files = self.repository.files
+
+        base_names_tests = {test_file.name: test_file for test_file in files.test_files}
         base_names_source = {
-            source_file.name: source_file
-            for files in self.repository.files.values()
-            for source_file in files.source_files
+            source_file.name: source_file for source_file in files.source_files
         }
 
         links: dict[TestFile, set[SourceFile]] = defaultdict(set)

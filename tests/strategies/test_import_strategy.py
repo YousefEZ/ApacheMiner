@@ -18,12 +18,12 @@ TEST_PATH = os.path.join("/home/", TEST_DIR, "org/package/")
 
 
 class MockRepository(Repository):
-    def __init__(self, files: dict[str, Files]) -> None:
-        self.files = files
+    def __init__(self, files: Files) -> None:
+        self._files = files
 
     @cached_property
-    def files(self) -> dict[str, Files]:
-        return self.files
+    def files(self) -> Files:
+        return self._files
 
 
 @dataclass(frozen=True)
@@ -60,13 +60,31 @@ def generate_source_code(imports: list[file_types.SourceFile]) -> list[str]:
     return [f"import {ImportStrategy.import_name_of(import_)};" for import_ in imports]
 
 
+def generate_test_code(imports: list[file_types.SourceFile]) -> list[str]:
+    return (
+        [generate_package_statement()]
+        + generate_source_code(imports)
+        + [
+            "public class Test {",
+            "@Test",
+            "public void test() {",
+            "}",
+            "}",
+        ]
+    )
+
+
 def generate_source_file(name: str, source_code: list[str]) -> MockSourceFile:
     assert name.endswith(".java")
     return MockSourceFile(
         project=PROJECT_PATH,
         path=SOURCE_PATH + name,
-        source_code=source_code,
+        source_code=[generate_package_statement()] + source_code,
     )
+
+
+def generate_package_statement() -> str:
+    return "package org.package;"
 
 
 def generate_test_file(name: str, source_code: list[str]) -> MockTestFile:
@@ -85,10 +103,10 @@ def test_correct_import_name():
 
 def test_single_import_strategy():
     source_file = generate_source_file("A.java", [])
-    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
+    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
 
     repository = MockRepository(
-        files={PROJECT_PATH: Files(source_files={source_file}, test_files={test_file})}
+        files=Files(source_files={source_file}, test_files={test_file})
     )
     binder = ImportStrategy(repository)
 
@@ -102,15 +120,11 @@ def test_multiple_import():
     source_file = generate_source_file("A.java", [])
     source_file2 = generate_source_file("B.java", [])
     test_file = generate_test_file(
-        "TestA.java", generate_source_code([source_file, source_file2])
+        "TestA.java", generate_test_code([source_file, source_file2])
     )
 
     repository = MockRepository(
-        files={
-            PROJECT_PATH: Files(
-                source_files={source_file, source_file2}, test_files={test_file}
-            )
-        }
+        files=Files(source_files={source_file, source_file2}, test_files={test_file})
     )
     binder = ImportStrategy(repository)
 
@@ -123,14 +137,10 @@ def test_multiple_import():
 def test_single_import_multiple_source():
     source_file = generate_source_file("A.java", [])
     source_file2 = generate_source_file("B.java", [])
-    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
+    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
 
     repository = MockRepository(
-        files={
-            PROJECT_PATH: Files(
-                source_files={source_file, source_file2}, test_files={test_file}
-            )
-        }
+        files=Files(source_files={source_file, source_file2}, test_files={test_file})
     )
     binder = ImportStrategy(repository)
 
@@ -142,17 +152,13 @@ def test_single_import_multiple_source():
 
 def test_single_import_multiple_test_single_source():
     source_file = generate_source_file("A.java", [])
-    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
+    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
     test_file2 = generate_test_file(
-        "TestAOther.java", generate_source_code([source_file])
+        "TestAOther.java", generate_test_code([source_file])
     )
 
     repository = MockRepository(
-        files={
-            PROJECT_PATH: Files(
-                source_files={source_file}, test_files={test_file, test_file2}
-            )
-        }
+        files=Files(source_files={source_file}, test_files={test_file, test_file2})
     )
     binder = ImportStrategy(repository)
 
@@ -165,16 +171,13 @@ def test_single_import_multiple_test_single_source():
 def test_single_import_multiple_test_multiple_source():
     source_file = generate_source_file("A.java", [])
     source_file2 = generate_source_file("B.java", [])
-    test_file = generate_test_file("TestA.java", generate_source_code([source_file]))
-    test_file2 = generate_test_file("TestB.java", generate_source_code([source_file2]))
+    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
+    test_file2 = generate_test_file("TestB.java", generate_test_code([source_file2]))
 
     repository = MockRepository(
-        files={
-            PROJECT_PATH: Files(
-                source_files={source_file, source_file2},
-                test_files={test_file, test_file2},
-            )
-        }
+        files=Files(
+            source_files={source_file, source_file2}, test_files={test_file, test_file2}
+        )
     )
     binder = ImportStrategy(repository)
 
