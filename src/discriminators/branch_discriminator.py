@@ -1,12 +1,18 @@
+import csv
 import json
+import os
 from dataclasses import dataclass
 from functools import cached_property
 from itertools import groupby
-from typing import Optional, Self
+from typing import Optional, Self, cast
 
 import rich.progress
 
-from src.discriminators.binding.file_types import SourceFile
+from src.discriminators.before_after_discriminator import TestStatistics
+from src.discriminators.binding.file_types import FileName, SourceFile
+from src.discriminators.binding.graph import Graph
+from src.discriminators.binding.import_strategy import ImportStrategy
+from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
 from src.discriminators.file_types import FileChanges
@@ -176,6 +182,35 @@ class BranchResults:
 
 
 @dataclass(frozen=True)
+class TotalBranchResults(Statistics):
+    test_statistics: list[TestStatistics]
+    source_files: set[SourceFile]
+
+    @cached_property
+    def aggregate_before(self) -> set[SourceFile]:
+        return set().union(*[statistic.before for statistic in self.test_statistics])
+
+    @cached_property
+    def aggregate_after(self) -> set[SourceFile]:
+        return set().union(*[statistic.after for statistic in self.test_statistics])
+
+    @cached_property
+    def test_first(self) -> set[SourceFile]:
+        return self.aggregate_before - self.aggregate_after
+
+    @property
+    def untested_source_files(self) -> set[SourceFile]:
+        return (self.source_files - self.aggregate_before) - self.aggregate_after
+
+    def output(self) -> str:
+        return (
+            f"Test First: {len(self.test_first)}\n"
+            + f"Test After: {len(self.aggregate_after)}\n"
+            + f"Untested Files: {len(self.untested_source_files)}\n"
+        )
+
+
+@dataclass(frozen=True)
 class BranchStatistics(Statistics):
     results: list[BranchResults]
 
@@ -195,7 +230,50 @@ class BranchDiscriminator(Discriminator):
     file_binder: BindingStrategy
     commit_data: list[FileChanges]
 
-    def process_branch(self, branch: Branch) -> BranchResults: ...
+    def process_branch(self, branch: Branch, graph: Graph) -> BranchResults:
+        log = branch.make_log()
+
+        testing_subset = {
+            file
+            for file in graph.test_files
+            if file.name in log.mapping.name_to_id.keys()
+        }
+        source_subset = {
+            file
+            for file in graph.source_files
+            if file.name in log.mapping.name_to_id.keys()
+        }
+
+        output = []
+
+        for test in rich.progress.track(testing_subset):
+            path = FileName(test.path)
+            file_number = self.transaction.mapping.name_to_id[path]
+            base_commit = self.transaction.transactions.first_occurrence(file_number)
+            assert base_commit is not None, f"File not found {test.name} @ {path}"
+            before, after = [], []
+
+            for source_file in graph.links[test].intersection(source_subset):
+                path = FileName(source_file.path)
+                file_number = self.transaction.mapping.name_to_id[path]
+                assert (
+                    file_number is not None
+                ), f"File not found {source_file.name} @ {path}"
+                commit = self.transaction.transactions.first_occurrence(file_number)
+                assert commit
+                if commit.number < base_commit.number:
+                    before.append(source_file)
+                else:
+                    after.append(source_file)
+            if before or after:
+                output.append(TestStatistics(test, before, after))
+        stats = TotalBranchResults(test_statistics=output, source_files=source_subset)
+        return BranchResults(
+            branch=branch,
+            before=stats.aggregate_before,
+            after=stats.aggregate_after,
+            untested=stats.untested_source_files,
+        )
 
     @property
     def statistics(self) -> BranchStatistics:
@@ -212,7 +290,7 @@ class BranchDiscriminator(Discriminator):
             ]
         )
         branches = log.all_merge_branches_into_main()
-        stats = list(map(self.process_branch, branches))
+        stats = [self.process_branch(branch, graph) for branch in branches]
 
         return BranchStatistics(results=stats)
 
@@ -223,3 +301,14 @@ if __name__ == "__main__":
         mapping = TransactionMap.model_validate(json.load(m))
 
     transaction_log = TransactionLog(transactions=transactions, mapping=mapping)
+    file_name = "zookeeper.csv"
+
+    with open(file_name, "r") as commit_file:
+        data = cast(list[FileChanges], list(csv.DictReader(commit_file)))
+
+    discriminator = BranchDiscriminator(
+        transaction=transaction_log,
+        file_binder=ImportStrategy(JavaRepository(os.path.abspath("../zookeeper"))),
+        commit_data=data,
+    )
+    print(discriminator.statistics.output())
