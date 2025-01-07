@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from src.discriminators.align import CommitAligner
 from src.discriminators.binding.file_types import FileName
-from src.discriminators.types import FileChanges, FileNumber
+from src.discriminators.file_types import FileChanges, FileNumber
 
 modification_map: dict[pydriller.ModificationType, str] = {
     pydriller.ModificationType.ADD: "A",
