@@ -2,10 +2,12 @@ import csv
 import os
 import re
 import tempfile
+from itertools import chain
 from typing import Optional, ParamSpec, cast
 
 import click
 import git
+import pydriller
 import rich.progress
 import rich.table
 import rich.theme
@@ -17,6 +19,7 @@ from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.discriminators.file_types import FileChanges
 from src.driver import generate_driver
+from src.git_progress import CloneProgress
 from src.spmf.association import analyze_apriori, apriori
 
 P = ParamSpec("P")
@@ -40,6 +43,29 @@ def cli(): ...
 
 @click.group()
 def fetch(): ...
+
+
+@cli.command()
+@click.option("--dir", "-d", type=click.Path(), required=True)
+@click.argument("targets", type=str, nargs=-1)
+def clone(dir: str, targets: list[str]) -> None:
+    stdin_targets = click.get_text_stream("stdin").read().splitlines()
+    for idx, repo in enumerate(
+        (
+            target
+            if pydriller.Repository._is_remote(target)
+            else f"{github_scraper.GITHUB_URL}/{target}"
+        )
+        for target in chain(targets, stdin_targets)
+    ):
+        name = repo.split(".git")[0].split("/")[-1]
+        console.print(
+            f"Cloning repository {name} [{idx+1}/{len(targets)+len(stdin_targets)}]"
+        )
+        with CloneProgress() as progress:
+            git.Repo.clone_from(
+                url=repo, progress=progress, to_path=os.path.join(dir, name)
+            )
 
 
 def print_if_not_silent(message: str, *, silent: bool = False):
@@ -241,7 +267,8 @@ def association(
 
 
 @cli.command()
-@click.option("--url", "-u", required=True)
+@click.option("--url", "-u", type=str)
+@click.option("--path", "-p", type=click.Path())
 @click.option(
     "--discriminator",
     "-d",
@@ -252,36 +279,47 @@ def association(
 @click.option(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
-@click.option("--repo", "-r", type=click.Path(), default="commits.csv")
 @click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
+@click.option("--save-repo", "-s", type=bool, default=True)
 def discriminate(
-    url: str,
+    url: Optional[str],
+    path: Optional[str],
     discriminator_type: DiscriminatorTypes,
     binding: Strategies,
-    repo: str,
     reverse_squash: bool,
+    save_repo: bool,
 ) -> None:
-    cwd = os.path.join(os.getcwd(), "repositories")
-    directory_name = url.split("/")[-1].replace(".git", "")
-    dir = os.path.join(cwd, directory_name)
-    if not os.path.exists("repositories"):
-        console.print("Creating path")
-        os.makedirs(dir)
+    assert url is not None or path is not None, "Either URL or path must be provided"
+    assert not (url and path), "Only one of URL or path must be provided"
+    if path:
+        assert os.path.exists(path), "Path does not exist"
+    
+    if save_repo:
+        if not os.path.exists("repositories"):
+            console.print("Creating path...")
+            os.makedirs("repositories")
 
-    if not os.path.exists(dir):
-        console.print(f"Cloning repository from {url}")
-        git.Repo.clone_from(url=url, to_path=dir)
-        console.print("Repository cloned")
+        cwd = os.path.join(os.getcwd(), "repositories")
+        directory_name = url.split("/")[-1].replace(".git", "")
+        path = os.path.join(cwd, directory_name)
+        if not os.path.exists(path):
+            os.makedirs(path)
+            console.print(f"Cloning repository from {url}...")
+            git.Repo.clone_from(url=url, to_path=dir)
+            console.print("Repository cloned")
 
-    path = os.path.join(dir, repo)
-    if not os.path.exists(path):
+    csv_path = os.path.join(path, "commits.csv")
+    
+    if not os.path.exists(csv_path):
         with rich.progress.Progress() as progress:
-            console.print(f"Drilling repository from {dir}")
-            driller.drill_repository(dir, path, progress, reverse_squash)
+            console.print(f"Drilling repository from {dir}...")
+            driller.drill_repository(dir, csv_path, progress, reverse_squash)
             console.print("Repository drilled")
             progress.stop()
 
-    with open(path, "r") as f:
+    with open(csv_path, "r") as f:
+        console.print("Running Discriminator...")
+        print(f)
         data = cast(list[FileChanges], list(csv.DictReader(f)))
         transaction_log = transaction.TransactionLog.from_commit_log(data)
 
