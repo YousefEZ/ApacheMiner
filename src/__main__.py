@@ -15,7 +15,7 @@ from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
 from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
-from src.discriminators.types import FileChanges
+from src.discriminators.file_types import FileChanges
 from src.driver import generate_driver
 from src.spmf.association import analyze_apriori, apriori
 
@@ -181,17 +181,10 @@ def repositories(
 @click.option("--input", "-i", "_input_file", type=click.Path(), required=True)
 @click.option("--output", "-o", type=click.Path(), required=True)
 @click.option("--map", "-m", "map_file", type=click.Path(), required=True)
-@click.option("--commit-aligned", "-c", is_flag=True, default=False)
-def transform(
-    _input_file: str, output: str, map_file: str, commit_aligned: bool
-) -> None:
+def transform(_input_file: str, output: str, map_file: str) -> None:
     with open(_input_file, "r") as commit_file:
         data = cast(list[FileChanges], list(csv.DictReader(commit_file)))
-        transaction_log = (
-            transaction.TransactionLog.aligned_commit_log(data)
-            if commit_aligned
-            else transaction.TransactionLog.from_commit_log(data)
-        )
+        transaction_log = transaction.TransactionLog.from_commit_log(data)
     with open(output, "w") as transactions, open(map_file, "w") as mapping:
         transactions.write(transaction_log.transactions.model_dump_json(indent=2))
         mapping.write(transaction_log.mapping.model_dump_json(indent=2))
@@ -260,13 +253,11 @@ def association(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
 @click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
-@click.option("--commit-aligned", "-c", is_flag=True, default=False)
 def discriminate(
     url: str,
     discriminator_type: DiscriminatorTypes,
     binding: Strategies,
     reverse_squash: bool,
-    commit_aligned: bool,
 ) -> None:
     with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
         OUTPUT_FILE = f"{dir}/dump.csv"
@@ -282,11 +273,7 @@ def discriminate(
 
         with open(OUTPUT_FILE, "r") as f:
             data = cast(list[FileChanges], list(csv.DictReader(f)))
-            transaction_log = (
-                transaction.TransactionLog.aligned_commit_log(data)
-                if commit_aligned
-                else transaction.TransactionLog.from_commit_log(data)
-            )
+            transaction_log = transaction.TransactionLog.from_commit_log(data)
 
         progress.stop()
         binding_strategy = strategy_factory[binding](JavaRepository(dir))

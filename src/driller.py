@@ -104,9 +104,10 @@ def stiched_commits(
             )
         }
 
-    for commit in pydriller.Repository(path).traverse_commits():
+    for commit in pydriller.Repository(path, order="topo-order").traverse_commits():
         if commit.hash in hash_to_commits:
             yield from hash_to_commits[commit.hash]
+
         yield commit
 
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Iterator, Optional, Self
 
-from src.discriminators.types import FileChanges
+from src.discriminators.file_types import FileChanges
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class Branch:
     @cached_property
     def commits(self) -> set[str]:
         node = self.tail
-        commits = set()
+        commits = {self.head.hash}
         while node.hash != self.head.hash:
             commits.add(node.hash)
             node = node.parents[0]
@@ -55,9 +55,57 @@ class CommitAligner:
     def __init__(self, changes: list[tuple[str, list[FileChanges]]]):
         # TODO: restructure such that init doesn't contain logic
         self._changes = changes
-        self._predecessor: dict[str, Optional[CommitNode]] = dict()
         self._main_branch = self._make_main_branch(self._changes)
         self._inline_branches()
+        tail = self._main_branch.tail
+        while tail.parents:
+            assert len(tail.parents) == 1
+            tail = tail.parents[0]
+        assert tail == self._main_branch.head
+
+    def get_successor(self, node: CommitNode) -> Optional[CommitNode]:
+        current_node = self._main_branch.tail
+        successor = None
+        while current_node.hash != node.hash:
+            successor = current_node
+            current_node = current_node.parents[0]
+        return successor
+
+    def _create_commit_from_changes(
+        self, commit_hash: str, nodes: dict[str, CommitNode]
+    ) -> CommitNode:
+        """Finds the commit in the commits list
+
+        Args:
+            commits (list[tuple[str, list[FileChanges]]]): The commits to search
+            hash (str): The hash of the commit to find
+
+        Returns (tuple[str, list[FileChanges]]): The commit found
+        """
+        if commit_hash in nodes:
+            return nodes[commit_hash]
+
+        for idx in range(len(self._changes)):
+            commit_hash, changes = self._changes[idx]
+
+            if commit_hash != commit_hash:
+                continue
+
+            parents_hash = changes[0]["parents"].split("|")
+            if changes[0]["parents"]:
+                for parent_hash in parents_hash:
+                    if parent_hash not in nodes:
+                        self._create_commit_from_changes(parent_hash, nodes)
+            parents = (
+                [nodes[parent] for parent in parents_hash]
+                if changes[0]["parents"]
+                else []
+            )
+
+            nodes[commit_hash] = CommitNode(commit_hash, changes, parents)
+            return nodes[commit_hash]
+
+        raise ValueError(f"Commit with hash {hash} not found")
 
     def _make_main_branch(self, commits: list[tuple[str, list[FileChanges]]]) -> Branch:
         """Creates a branch from the commits given, assuming all the commits
@@ -72,10 +120,18 @@ class CommitAligner:
         """
         nodes: dict[str, CommitNode] = dict()
 
-        for commit_hash, commit in commits:
+        for idx in range(len(commits)):
+            commit_hash, commit = commits[idx]
             changes: list[FileChanges] = list(commit)
             parents = (
-                [nodes[parent] for parent in changes[0]["parents"].split("|")]
+                [
+                    (
+                        nodes[parent]
+                        if parent in nodes
+                        else self._create_commit_from_changes(parent, nodes)
+                    )
+                    for parent in changes[0]["parents"].split("|")
+                ]
                 if changes[0]["parents"]
                 else []
             )
@@ -83,14 +139,9 @@ class CommitAligner:
                 hash=commit_hash, changes=changes, parents=parents
             )
 
-            self._predecessor[commit_hash] = parents[0] if parents else None
-
         assert (
             nodes[commits[0][0]].parents == []
         ), "The first commit should have no parents"
-        assert (
-            commits[-1][0] not in self._predecessor.values()
-        ), "The last commit should have no children"
 
         return Branch(head=nodes[commits[0][0]], tail=nodes[commits[-1][0]])
 
@@ -151,9 +202,6 @@ class CommitAligner:
         # Removing the main branch parent and replacing it with branch tail
         node.parents[0] = node.parents.pop()
 
-        self._predecessor[node.hash] = path.tail
-        self._predecessor[branch_node_previous.hash] = node.parents[0]
-
         return Branch(branch_node_previous, node)
 
     def _inline_branches(self):
@@ -168,11 +216,13 @@ class CommitAligner:
             visited.add(current_node.hash)
             if len(current_node.parents) != 2:
                 # we only want the merge commits
-                current_node = self._predecessor[current_node.hash]
+                current_node = self.get_successor(current_node)
                 continue
 
-            print(f"Merging branch with tail {current_node.hash} | {len(visited)}")
-            path = self._trace_path_back_to_main(current_node.parents[1])
+            if current_node.parents[1].hash in visited:
+                path = Branch(current_node.parents[1], current_node.parents[1])
+            else:
+                path = self._trace_path_back_to_main(current_node.parents[1])
 
             stitched_branch = self._stitch_path(current_node, path, visited)
             visited.update(stitched_branch.commits)
@@ -183,8 +233,8 @@ class CommitAligner:
     def __iter__(self) -> Iterator[list[FileChanges]]:
         """Converts the branches into rows of FileChanges"""
         rows: list[list[FileChanges]] = []
-        current_node: Optional[CommitNode] = self._main_branch.tail
+        current_node: Optional[CommitNode] = self._main_branch.head
         while current_node is not None:
             rows.append(current_node.changes)
-            current_node = current_node.parents[0] if current_node.parents else None
-        return reversed(rows)
+            current_node = self.get_successor(current_node)
+        return iter(rows)
