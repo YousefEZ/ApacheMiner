@@ -1,8 +1,9 @@
 import json
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Optional, Self
 from itertools import groupby
+from typing import Optional, Self
+
 import rich.progress
 
 from src.discriminators.binding.file_types import SourceFile

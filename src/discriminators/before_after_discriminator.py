@@ -1,5 +1,4 @@
 import json
-import os
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -7,10 +6,9 @@ import rich.progress
 
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
+from src.discriminators.file_types import FileChanges
 from src.discriminators.transaction import TransactionLog, TransactionMap, Transactions
 
 console = rich.console.Console()
@@ -56,6 +54,7 @@ class BeforeAfterStatistics(Statistics):
 class BeforeAfterDiscriminator(Discriminator):
     transaction: TransactionLog
     file_binder: BindingStrategy
+    commit_data: list[FileChanges]
 
     @property
     def statistics(self) -> BeforeAfterStatistics:
@@ -94,8 +93,3 @@ if __name__ == "__main__":
         mapping = TransactionMap.model_validate(json.load(m))
 
     transaction_log = TransactionLog(transactions=transactions, mapping=mapping)
-    discriminator = BeforeAfterDiscriminator(
-        transaction_log, ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
-    )
-
-    print(discriminator.statistics.output())
