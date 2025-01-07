@@ -171,7 +171,7 @@ class TransactionBuilder:
             classes_used=classes_used,
         )
 
-    def _rename(self, file_name: FileName) -> File:
+    def _rename(self, file_name: FileName) -> File | None:
         oldId, newId = map(FileName, file_name.split("|"))
         if oldId not in self._id_map:
             return None
