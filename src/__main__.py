@@ -252,37 +252,46 @@ def association(
 @click.option(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
+@click.option("--repo", "-r", type=click.Path(), default="commits.csv")
 @click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
 def discriminate(
     url: str,
     discriminator_type: DiscriminatorTypes,
     binding: Strategies,
+    repo: str,
     reverse_squash: bool,
 ) -> None:
-    with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
-        OUTPUT_FILE = f"{dir}/dump.csv"
+    cwd = os.path.join(os.getcwd(), "repositories")
+    directory_name = url.split("/")[-1].replace(".git", "")
+    dir = os.path.join(cwd, directory_name)
+    if not os.path.exists("repositories"):
+        console.print("Creating path")
+        os.makedirs(dir)
 
+    if not os.path.exists(dir):
         console.print(f"Cloning repository from {url}")
         git.Repo.clone_from(url=url, to_path=dir)
-
         console.print("Repository cloned")
-        console.print(f"Drilling repository from {dir}")
 
-        driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
-        console.print("Repository drilled")
+    path = os.path.join(dir, repo)
+    if not os.path.exists(path):
+        with rich.progress.Progress() as progress:
+            console.print(f"Drilling repository from {dir}")
+            driller.drill_repository(dir, path, progress, reverse_squash)
+            console.print("Repository drilled")
+            progress.stop()
 
-        with open(OUTPUT_FILE, "r") as f:
-            data = cast(list[FileChanges], list(csv.DictReader(f)))
-            transaction_log = transaction.TransactionLog.from_commit_log(data)
+    with open(path, "r") as f:
+        data = cast(list[FileChanges], list(csv.DictReader(f)))
+        transaction_log = transaction.TransactionLog.from_commit_log(data)
 
-        progress.stop()
-        binding_strategy = strategy_factory[binding](JavaRepository(dir))
-        discriminator = discriminator_factory[discriminator_type](
-            transaction_log, binding_strategy
-        )
-        statistics = discriminator.statistics
+    binding_strategy = strategy_factory[binding](JavaRepository(dir))
+    discriminator = discriminator_factory[discriminator_type](
+        transaction_log, binding_strategy
+    )
+    statistics = discriminator.statistics
 
-        console.print(statistics.output())
+    console.print(statistics.output())
 
 
 cli.add_command(fetch)

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from src.discriminators.align import CommitAligner
 from src.discriminators.binding.file_types import FileName
-from src.discriminators.types import FileChanges, FileNumber
+from src.discriminators.file_types import FileChanges, FileNumber
 
 modification_map: dict[pydriller.ModificationType, str] = {
     pydriller.ModificationType.ADD: "A",
@@ -30,6 +30,13 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 class Commit(BaseModel):
     number: int
     files: list[FileNumber]
+    """files: dict[
+        FileNumber,
+        (
+            tuple[pydriller.ModificationType, set[str], set[str]]
+            | pydriller.ModificationType
+        ),
+    ]"""
 
 
 class TransactionMap(BaseModel):
@@ -143,42 +150,6 @@ class TransactionBuilder:
 class TransactionLog(BaseModel):
     transactions: Transactions
     mapping: TransactionMap
-
-    def filter_on(self, filterer: Callable[[FileName], bool]) -> TransactionLog:
-        """Removes anything that does pass the filterer, and creates a new
-        TransactionLog without these entries
-
-        Args:
-            filterer (Callable[[FileName], bool]): The filterer which takes
-            the file_name as an argument
-
-        Returns (TransactionLog): The new TransactionLog with the filtered
-            entries
-        """
-        removed_ids = {
-            id
-            for id, names in self.mapping.id_to_names.items()
-            if not filterer(names[-1])
-        }
-
-        mapping = {
-            id: names
-            for id, names in self.mapping.id_to_names.items()
-            if id not in removed_ids
-        }
-        commit_id = 0
-        commits: list[Commit] = []
-        for commit in self.transactions.commits:
-            new_files = [file for file in commit.files if file not in removed_ids]
-            if not new_files:
-                continue
-
-            commits.append(Commit(number=commit_id, files=new_files))
-            commit_id += 1
-        return TransactionLog(
-            transactions=Transactions(commits=commits),
-            mapping=TransactionMap(id_to_names=mapping),
-        )
 
     @classmethod
     def aligned_commit_log(cls, rows: list[FileChanges]) -> Self:

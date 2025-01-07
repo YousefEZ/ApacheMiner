@@ -45,6 +45,7 @@ class BeforeAfterStatistics(Statistics):
         return (self.graph.source_files - self.aggregate_before) - self.aggregate_after
 
     def output(self) -> str:
+        print(self.untested_source_files.pop().path)
         return (
             f"Test First: {len(self.test_first)}\n"
             + f"Test After: {len(self.aggregate_after)}\n"
@@ -63,20 +64,19 @@ class BeforeAfterDiscriminator(Discriminator):
         graph = self.file_binder.graph()
         print(f"Graph has {len(graph.test_files)} test files")
         print(f"Graph has {len(graph.source_files)} source files")
-        print(f"Graph has {len(graph.links)} links")
+        print(f"Graph has {len(graph.test_to_source_links)} links")
         for test in rich.progress.track(graph.test_files):
             path = FileName(test.path)
             file_number = self.transaction.mapping.name_to_id[path]
             base_commit = self.transaction.transactions.first_occurrence(file_number)
-            assert base_commit is not None, f"File not found {test.name} @ {path}"
+            assert base_commit is not None, f"Test file not found {test.name} @ {path}"
             before, after = [], []
-
-            for source_file in graph.links[test]:
+            for source_file in graph.test_to_source_links[test]:
                 path = FileName(source_file.path)
                 file_number = self.transaction.mapping.name_to_id[path]
                 assert (
                     file_number is not None
-                ), f"File not found {source_file.name} @ {path}"
+                ), f"Source file not found {source_file.name} @ {path}"
                 commit = self.transaction.transactions.first_occurrence(file_number)
                 assert commit
                 if commit.number < base_commit.number:

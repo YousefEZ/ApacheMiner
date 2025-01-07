@@ -164,3 +164,6 @@ cython_debug/
 
 # Java files
 .spmf/
+
+# Mac stuff
+.DS_Store

@@ -113,7 +113,7 @@ def test_single_import_strategy():
     graph = binder.graph()
     assert graph.test_files == {test_file}
     assert graph.source_files == {source_file}
-    assert graph.links == {test_file: {source_file}}
+    assert graph.test_to_source_links == {test_file: {source_file}}
 
 
 def test_multiple_import():
@@ -131,7 +131,7 @@ def test_multiple_import():
     graph = binder.graph()
     assert graph.test_files == {test_file}
     assert graph.source_files == {source_file, source_file2}
-    assert graph.links == {test_file: {source_file, source_file2}}
+    assert graph.test_to_source_links == {test_file: {source_file, source_file2}}
 
 
 def test_single_import_multiple_source():
@@ -147,7 +147,7 @@ def test_single_import_multiple_source():
     graph = binder.graph()
     assert graph.test_files == {test_file}
     assert graph.source_files == {source_file, source_file2}
-    assert graph.links == {test_file: {source_file}}
+    assert graph.test_to_source_links == {test_file: {source_file}}
 
 
 def test_single_import_multiple_test_single_source():
@@ -165,7 +165,10 @@ def test_single_import_multiple_test_single_source():
     graph = binder.graph()
     assert graph.test_files == {test_file, test_file2}
     assert graph.source_files == {source_file}
-    assert graph.links == {test_file: {source_file}, test_file2: {source_file}}
+    assert graph.test_to_source_links == {
+        test_file: {source_file},
+        test_file2: {source_file},
+    }
 
 
 def test_single_import_multiple_test_multiple_source():
@@ -184,4 +187,7 @@ def test_single_import_multiple_test_multiple_source():
     graph = binder.graph()
     assert graph.test_files == {test_file, test_file2}
     assert graph.source_files == {source_file, source_file2}
-    assert graph.links == {test_file: {source_file}, test_file2: {source_file2}}
+    assert graph.test_to_source_links == {
+        test_file: {source_file},
+        test_file2: {source_file2},
+    }
