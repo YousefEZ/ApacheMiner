@@ -1,7 +1,6 @@
 import csv
 import os
 import re
-import shutil
 import tempfile
 from itertools import chain
 from typing import Optional, ParamSpec, cast
@@ -281,59 +280,64 @@ def association(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
 @click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
-@click.option("--save-repo", "-s", type=bool, default=True)
+@click.option("--save", "-s", is_flag=True, help="Save the repository for reuse")
 def discriminate(
     url: Optional[str],
     path: Optional[str],
     discriminator_type: DiscriminatorTypes,
     binding: Strategies,
     reverse_squash: bool,
-    save_repo: bool,
+    save: bool,
 ) -> None:
-    assert not (url and path), "Only one of URL or path must be provided"
-    if path:
-        assert os.path.exists(path), "Path does not exist"
+    assert url or path, "Either URL or Path must be provided"
 
-    if not os.path.exists("repositories"):
-        console.print("Creating path...")
-        os.makedirs("repositories")
+    if url:
+        if save:
+            assert path, "Path must be provided to save the repository"
+            assert not os.path.exists(path), "Path must not exist"
+            assert url, "URL must be provided to clone the repository"
 
-    if not path:
-        assert url
-        cwd = os.path.join(os.getcwd(), "repositories")
-        directory_name = url.split("/")[-1].replace(".git", "")
-        path = os.path.join(cwd, directory_name)
+            console.print(f"Cloning repository from {url}")
+            os.makedirs(path)
+            git.Repo.clone_from(url=url, to_path=path)
+            console.print("Repository cloned")
 
-        assert url
-        os.makedirs(path)
-        console.print(f"Cloning repository from {url}...")
-        git.Repo.clone_from(url=url, to_path=path)
-        console.print("Repository cloned")
+            run_discriminator(path, discriminator_type, binding, reverse_squash)
+        else:
+            with tempfile.TemporaryDirectory() as dir:
+                console.print(f"Cloning repository from {url}")
+                git.Repo.clone_from(url=url, to_path=dir)
+                console.print("Repository cloned")
 
-    csv_path = os.path.join(path, "commits.csv")
+                run_discriminator(dir, discriminator_type, binding, reverse_squash)
+    elif path:
+        run_discriminator(path, discriminator_type, binding, reverse_squash)
 
-    if not os.path.exists(csv_path):
+
+def run_discriminator(
+    dir: str,
+    discriminator_type: DiscriminatorTypes,
+    binding: Strategies,
+    reverse_squash: bool,
+) -> None:
+    OUTPUT_FILE = f"{dir}/commits.csv"
+    if not os.path.exists(OUTPUT_FILE):
+        console.print(f"Drilling repository from {dir}")
         with rich.progress.Progress() as progress:
-            console.print(f"Drilling repository from {path}...")
-            driller.drill_repository(path, csv_path, progress, reverse_squash)
-            console.print("Repository drilled")
-            progress.stop()
+            driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
+        console.print("Repository drilled")
 
-    with open(csv_path, "r") as f:
-        console.print("Running Discriminator...")
+    with open(OUTPUT_FILE, "r") as f:
         data = cast(list[FileChanges], list(csv.DictReader(f)))
         transaction_log = transaction.TransactionLog.from_commit_log(data)
 
-    binding_strategy = strategy_factory[binding](JavaRepository(path))
+    binding_strategy = strategy_factory[binding](JavaRepository(dir))
     discriminator = discriminator_factory[discriminator_type](
         transaction_log, binding_strategy
     )
     statistics = discriminator.statistics
 
     console.print(statistics.output())
-
-    if not save_repo:
-        shutil.rmtree(path)
 
 
 cli.add_command(fetch)
