@@ -7,6 +7,7 @@ from typing import Optional, ParamSpec, cast
 
 import click
 import git
+import pydriller
 import rich.progress
 import rich.table
 import rich.theme
@@ -45,30 +46,21 @@ def fetch(): ...
 
 
 @cli.command()
-@click.option(
-    "--repository",
-    "-r",
-    "_repositories",
-    type=str,
-    multiple=True,
-    help="Repository URL in some form of https://github.com/org/name",
-)
-@click.option(
-    "--name",
-    "-n",
-    "_names",
-    type=str,
-    multiple=True,
-    help="Repository name in the form of: org/name",
-)
 @click.option("--dir", "-d", type=click.Path(), required=True)
-def clone(_repositories: list[str], _names: list[str], dir: str) -> None:
+@click.argument("targets", type=str, nargs=-1)
+def clone(dir: str, targets: list[str]) -> None:
+    stdin_targets = click.get_text_stream("stdin").read().splitlines()
     for idx, repo in enumerate(
-        chain(_repositories, (f"{github_scraper.GITHUB_URL}/{name}" for name in _names))
+        (
+            target
+            if pydriller.Repository._is_remote(target)
+            else f"{github_scraper.GITHUB_URL}/{target}"
+        )
+        for target in chain(targets, stdin_targets)
     ):
         name = repo.split(".git")[0].split("/")[-1]
         console.print(
-            f"Cloning repository {name} [{idx+1}/{len(_repositories)+len(_names)}]"
+            f"Cloning repository {name} [{idx+1}/{len(targets)+len(stdin_targets)}]"
         )
         with CloneProgress() as progress:
             git.Repo.clone_from(
