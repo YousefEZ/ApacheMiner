@@ -5,11 +5,13 @@ from functools import cached_property
 
 import openai
 import rich.progress
+from pydriller import ModificationType
 
 from .binding.file_types import FileName, SourceFile
 from .binding.strategy import BindingStrategy
 from .discriminator import Discriminator, Statistics
-from .transaction import FileNumber, TransactionLog, modification_map
+from .file_types import FileNumber
+from .transaction import Commit, File, TransactionLog
 
 console = rich.console.Console()
 TPM = 100000
@@ -50,18 +52,21 @@ class LLMDiscriminator(Discriminator):
     transaction: TransactionLog
     file_binder: BindingStrategy
 
-    def substantial_change(self, commit_info) -> bool:
-        if modification_map[commit_info[0]] == "A":
-            return True  # always accept new files
-        if commit_info is None:
-            return False  # no change
-        if modification_map[commit_info[0]] != "M":
-            return False  # not a modification (or creation)
-        if len(commit_info[1]) != 2:
-            return False  # no lines added or deleted
-        if commit_info[1][0] < 20 or commit_info[1][0] < commit_info[1][1]:
-            return False  # not a substantial change to code
+    def adds_features(self, file_commit_info: File) -> bool:
+        """Does this commit add new methods to the file?"""
+        if file_commit_info.modification_type == ModificationType.ADD:
+            return True  # auto-accept file creations
+        if file_commit_info.modification_type != ModificationType.MODIFY:
+            return False  # not a modification
+        if len(file_commit_info.new_methods) == 0:
+            return False  # not a modification with method additions
         return True
+
+    def get_fc(self, commit: Commit, file_number: FileNumber) -> File:
+        for fc in commit.files:
+            if fc.file_number == file_number:
+                return fc
+        raise ValueError("File not found in commit")
 
     def query_tfd(
         self, source_id: FileNumber, commit_list: list[tuple[int, set[FileNumber]]]
@@ -104,23 +109,19 @@ class LLMDiscriminator(Discriminator):
 
             # collect relevant commits
             commit_list: list[tuple[int, set[FileNumber]]] = []
-            source_path = FileName(
-                os.path.join(os.path.basename(source_file.project), source_file.path)
-            )
+            source_path = FileName(source_file.path)
             source_id = self.transaction.mapping.name_to_id[source_path]
             file_collection = [source_id]
             for test_file in graph.source_to_test_links[source_file]:
-                test_path = FileName(
-                    os.path.join(os.path.basename(test_file.project), test_file.path)
-                )
+                test_path = FileName(test_file.path)
                 file_collection.append(self.transaction.mapping.name_to_id[test_path])
             for commit in self.transaction.transactions.commits:
                 commit_data: set[FileNumber] = set()
                 for file_number in file_collection:
-                    if file_number in commit.files and self.substantial_change(
-                        commit.files[file_number]
-                    ):
-                        commit_data.add(file_number)
+                    if file_number in commit.file_numbers:
+                        file_commit = self.get_fc(commit, file_number)
+                        if self.adds_features(file_commit):
+                            commit_data.add(file_number)
                 if len(commit_data) > 0:
                     commit_list.append((commit.number, commit_data))
 
