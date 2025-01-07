@@ -164,3 +164,5 @@ cython_debug/
 
 # Java files
 .spmf/
+
+.repositories/
