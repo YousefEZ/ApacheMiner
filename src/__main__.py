@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+import shutil
 import tempfile
 from itertools import chain
 from typing import Optional, ParamSpec, cast
@@ -289,47 +290,50 @@ def discriminate(
     reverse_squash: bool,
     save_repo: bool,
 ) -> None:
-    assert url is not None or path is not None, "Either URL or path must be provided"
     assert not (url and path), "Only one of URL or path must be provided"
     if path:
         assert os.path.exists(path), "Path does not exist"
-    
-    if save_repo:
-        if not os.path.exists("repositories"):
-            console.print("Creating path...")
-            os.makedirs("repositories")
 
+    if not os.path.exists("repositories"):
+        console.print("Creating path...")
+        os.makedirs("repositories")
+
+    if not path:
+        assert url
         cwd = os.path.join(os.getcwd(), "repositories")
         directory_name = url.split("/")[-1].replace(".git", "")
         path = os.path.join(cwd, directory_name)
-        if not os.path.exists(path):
-            os.makedirs(path)
-            console.print(f"Cloning repository from {url}...")
-            git.Repo.clone_from(url=url, to_path=dir)
-            console.print("Repository cloned")
+
+        assert url
+        os.makedirs(path)
+        console.print(f"Cloning repository from {url}...")
+        git.Repo.clone_from(url=url, to_path=path)
+        console.print("Repository cloned")
 
     csv_path = os.path.join(path, "commits.csv")
-    
+
     if not os.path.exists(csv_path):
         with rich.progress.Progress() as progress:
-            console.print(f"Drilling repository from {dir}...")
-            driller.drill_repository(dir, csv_path, progress, reverse_squash)
+            console.print(f"Drilling repository from {path}...")
+            driller.drill_repository(path, csv_path, progress, reverse_squash)
             console.print("Repository drilled")
             progress.stop()
 
     with open(csv_path, "r") as f:
         console.print("Running Discriminator...")
-        print(f)
         data = cast(list[FileChanges], list(csv.DictReader(f)))
         transaction_log = transaction.TransactionLog.from_commit_log(data)
 
-    binding_strategy = strategy_factory[binding](JavaRepository(dir))
+    binding_strategy = strategy_factory[binding](JavaRepository(path))
     discriminator = discriminator_factory[discriminator_type](
         transaction_log, binding_strategy
     )
     statistics = discriminator.statistics
 
     console.print(statistics.output())
+
+    if not save_repo:
+        shutil.rmtree(path)
 
 
 cli.add_command(fetch)

@@ -1,5 +1,3 @@
-import json
-import os
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -7,11 +5,9 @@ import rich.progress
 
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
-from src.discriminators.transaction import TransactionLog, TransactionMap, Transactions
+from src.discriminators.transaction import TransactionLog
 
 console = rich.console.Console()
 
@@ -45,7 +41,6 @@ class BeforeAfterStatistics(Statistics):
         return (self.graph.source_files - self.aggregate_before) - self.aggregate_after
 
     def output(self) -> str:
-        print(self.untested_source_files.pop().path)
         return (
             f"Test First: {len(self.test_first)}\n"
             + f"Test After: {len(self.aggregate_after)}\n"
@@ -86,16 +81,3 @@ class BeforeAfterDiscriminator(Discriminator):
             if before or after:
                 output.append(TestStatistics(test, before, after))
         return BeforeAfterStatistics(test_statistics=output, graph=graph)
-
-
-if __name__ == "__main__":
-    with open("transactions.txt") as t, open("mapping.json") as m:
-        transactions = Transactions.model_validate(json.load(t))
-        mapping = TransactionMap.model_validate(json.load(m))
-
-    transaction_log = TransactionLog(transactions=transactions, mapping=mapping)
-    discriminator = BeforeAfterDiscriminator(
-        transaction_log, ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
-    )
-
-    print(discriminator.statistics.output())

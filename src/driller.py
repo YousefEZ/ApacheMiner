@@ -99,6 +99,19 @@ def get_new_methods(diffs: dict[str, list[tuple[int, str]]]) -> set[str]:
     return plus_methods - minus_methods
 
 
+def modify_return(file: ModifiedFileProtocol, delimiter: str) -> str:
+    assert file.new_path
+    if file.new_path.endswith(".java"):
+        added_methods = get_new_methods(file.diff_parsed)
+        if len(added_methods) > 0:
+            classes_referenced = get_classes_used(file.diff_parsed)
+            return (
+                f"{file.new_path}{delimiter}"
+                + f"{added_methods}{delimiter}{classes_referenced}"
+            )
+    return file.new_path
+
+
 def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
     if file.change_type == pydriller.ModificationType.RENAME:
         return f"{file.old_path}{delimiter}{file.new_path}"
@@ -109,21 +122,11 @@ def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
         file.change_type == pydriller.ModificationType.ADD
         or file.change_type == pydriller.ModificationType.COPY
         or file.change_type == pydriller.ModificationType.UNKNOWN
-        or file.change_type == pydriller.ModificationType.MODIFY
     ):
         assert file.new_path
         return file.new_path
-    """elif file.change_type == pydriller.ModificationType.MODIFY:
-        assert file.new_path
-        if file.new_path.endswith(".java"):
-            added_methods = get_new_methods(file.diff_parsed)
-            if len(added_methods) > 0:
-                classes_referenced = get_classes_used(file.diff_parsed)
-                return (
-                    f"{file.new_path}{delimiter}"
-                    + f"{added_methods}{delimiter}{classes_referenced}"
-                )
-        return file.new_path"""
+    elif file.change_type == pydriller.ModificationType.MODIFY:
+        return modify_return(file, delimiter)
 
     assert False, f"Unknown change type: {file.change_type}"
 

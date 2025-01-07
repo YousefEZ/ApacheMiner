@@ -8,6 +8,7 @@ from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.commit_seq_discriminator import CommitSequenceDiscriminator
 from src.discriminators.transaction import (
     Commit,
+    File,
     FileNumber,
     TransactionLog,
     TransactionMap,
@@ -39,24 +40,39 @@ class MockTransactionLog(TransactionLog):
         mapping = MockTransactionMap(id_to_names={})
         file_id = 0
         for i, commit_info in enumerate(commit_list):
-            commit = Commit(number=i, files={})
+            commit = Commit(number=i, files=[])
             transactions.commits.append(commit)
             for file, modification in commit_info:
                 if modification == modification_type.ADD:
                     mapping.id_to_names[FileNumber(file_id)] = [file.name]
-                    commit.files[FileNumber(file_id)] = modification_type.ADD
+                    file = File(
+                        file_number=file_id,
+                        modification_type=modification,
+                        new_methods=set(),
+                        classes_used=set(),
+                    )
+                    commit.files.append(file)
                     file_id += 1
                 elif (
                     isinstance(modification, tuple)
                     and modification[0] == modification_type.MODIFY
                 ):
-                    commit.files[mapping.name_to_id[file.name]] = (
-                        modification[0],
-                        modification[1],
-                        modification[2],
+                    file = File(
+                        file_number=mapping.name_to_id[file.name],
+                        modification_type=modification[0],
+                        new_methods=modification[1],
+                        classes_used=modification[2],
                     )
+                    commit.files.append(file)
                 else:
-                    commit.files[mapping.name_to_id[file.name]] = modification
+                    file = File(
+                        file_number=mapping.name_to_id[file.name],
+                        modification_type=modification,
+                        new_methods=set(),
+                        classes_used=set(),
+                    )
+                    commit.files.append(file)
+        print(f"Commits: {transactions.commits}")
         return cls(mapping=mapping, transactions=transactions)
 
 
@@ -176,7 +192,8 @@ def test_output_format():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 0\nTest Elsewhere: 0"
+        discriminator.statistics.output()
+        == "Test First Updates: 0\nTest Elsewhere: 0\nUntested Files: 0\n"
     )
 
 
@@ -197,7 +214,8 @@ def test_found_tfd_split_commits():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 1\nTest Elsewhere: 0"
+        discriminator.statistics.output()
+        == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
     )
 
     # test case with multiple commits
@@ -221,7 +239,8 @@ def test_found_tfd_split_commits():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 1\nTest Elsewhere: 0"
+        discriminator.statistics.output()
+        == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
     )
 
 
@@ -240,7 +259,8 @@ def test_found_tfd_same_commits():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 1\nTest Elsewhere: 0"
+        discriminator.statistics.output()
+        == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
     )
 
     # test case with multiple commits
@@ -260,7 +280,8 @@ def test_found_tfd_same_commits():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 1\nTest Elsewhere: 0"
+        discriminator.statistics.output()
+        == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
     )
 
 
@@ -281,7 +302,8 @@ def test_failed_tfd():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 0\nTest Elsewhere: 1"
+        discriminator.statistics.output()
+        == "Test First Updates: 0\nTest Elsewhere: 1\nUntested Files: 0\n"
     )
 
     # source commited without test
@@ -300,7 +322,8 @@ def test_failed_tfd():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 0\nTest Elsewhere: 1"
+        discriminator.statistics.output()
+        == "Test First Updates: 0\nTest Elsewhere: 1\nUntested Files: 0\n"
     )
 
     # source commited before test
@@ -319,7 +342,8 @@ def test_failed_tfd():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert (
-        discriminator.statistics.output() == "Test First Updates: 0\nTest Elsewhere: 1"
+        discriminator.statistics.output()
+        == "Test First Updates: 0\nTest Elsewhere: 1\nUntested Files: 0\n"
     )
 
 
@@ -497,7 +521,6 @@ def test_test_other_source_not_counted():
         if stats.source == sourceA:
             stats_sourceA = stats
             break
-    print(stats_sourceA.changed_tests_per_commit)
     assert not stats_sourceA.is_tfd
     assert len(stats_sourceA.changed_tests_per_commit) == 2
     assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
