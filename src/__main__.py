@@ -2,6 +2,7 @@ import csv
 import os
 import re
 import tempfile
+from itertools import chain
 from typing import Optional, ParamSpec, cast
 
 import click
@@ -17,6 +18,7 @@ from src.discriminators.binding.repository import JavaRepository
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.discriminators.file_types import FileChanges
 from src.driver import generate_driver
+from src.git_progress import CloneProgress
 from src.spmf.association import analyze_apriori, apriori
 
 P = ParamSpec("P")
@@ -40,6 +42,38 @@ def cli(): ...
 
 @click.group()
 def fetch(): ...
+
+
+@cli.command()
+@click.option(
+    "--repository",
+    "-r",
+    "_repositories",
+    type=str,
+    multiple=True,
+    help="Repository URL in some form of https://github.com/org/name",
+)
+@click.option(
+    "--name",
+    "-n",
+    "_names",
+    type=str,
+    multiple=True,
+    help="Repository name in the form of: org/name",
+)
+@click.option("--dir", "-d", type=click.Path(), required=True)
+def clone(_repositories: list[str], _names: list[str], dir: str) -> None:
+    for idx, repo in enumerate(
+        chain(_repositories, (f"{github_scraper.GITHUB_URL}/{name}" for name in _names))
+    ):
+        name = repo.split(".git")[0].split("/")[-1]
+        console.print(
+            f"Cloning repository {name} [{idx+1}/{len(_repositories)+len(_names)}]"
+        )
+        with CloneProgress() as progress:
+            git.Repo.clone_from(
+                url=repo, progress=progress, to_path=os.path.join(dir, name)
+            )
 
 
 def print_if_not_silent(message: str, *, silent: bool = False):
@@ -241,7 +275,8 @@ def association(
 
 
 @cli.command()
-@click.option("--url", "-u", required=True)
+@click.option("--url", "-u", type=str)
+@click.option("--path", "-p", type=click.Path())
 @click.option(
     "--discriminator",
     "-d",
@@ -254,35 +289,49 @@ def association(
 )
 @click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
 def discriminate(
-    url: str,
+    url: Optional[str],
+    path: Optional[str],
     discriminator_type: DiscriminatorTypes,
     binding: Strategies,
     reverse_squash: bool,
 ) -> None:
-    with tempfile.TemporaryDirectory() as dir, rich.progress.Progress() as progress:
-        OUTPUT_FILE = f"{dir}/dump.csv"
+    assert url or path, "Either URL or Path must be provided"
 
-        console.print(f"Cloning repository from {url}")
-        git.Repo.clone_from(url=url, to_path=dir)
+    if url:
+        with tempfile.TemporaryDirectory() as dir:
+            console.print(f"Cloning repository from {url}")
+            git.Repo.clone_from(url=url, to_path=dir)
 
-        console.print("Repository cloned")
-        console.print(f"Drilling repository from {dir}")
+            console.print("Repository cloned")
+            run_discriminator(dir, discriminator_type, binding, reverse_squash)
+    elif path:
+        run_discriminator(path, discriminator_type, binding, reverse_squash)
 
+
+def run_discriminator(
+    dir: str,
+    discriminator_type: DiscriminatorTypes,
+    binding: Strategies,
+    reverse_squash: bool,
+) -> None:
+    OUTPUT_FILE = f"{dir}/dump.csv"
+    console.print(f"Drilling repository from {dir}")
+
+    with rich.progress.Progress() as progress:
         driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
-        console.print("Repository drilled")
+    console.print("Repository drilled")
 
-        with open(OUTPUT_FILE, "r") as f:
-            data = cast(list[FileChanges], list(csv.DictReader(f)))
-            transaction_log = transaction.TransactionLog.from_commit_log(data)
+    with open(OUTPUT_FILE, "r") as f:
+        data = cast(list[FileChanges], list(csv.DictReader(f)))
+        transaction_log = transaction.TransactionLog.from_commit_log(data)
 
-        progress.stop()
-        binding_strategy = strategy_factory[binding](JavaRepository(dir))
-        discriminator = discriminator_factory[discriminator_type](
-            transaction_log, binding_strategy
-        )
-        statistics = discriminator.statistics
+    binding_strategy = strategy_factory[binding](JavaRepository(dir))
+    discriminator = discriminator_factory[discriminator_type](
+        transaction_log, binding_strategy
+    )
+    statistics = discriminator.statistics
 
-        console.print(statistics.output())
+    console.print(statistics.output())
 
 
 cli.add_command(fetch)
