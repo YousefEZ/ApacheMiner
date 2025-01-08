@@ -27,9 +27,36 @@ reverse_modification_map: dict[str, pydriller.ModificationType] = dict(
 )
 
 
+def logstr_to_set(string: str) -> set[str]:
+    string = string.strip().removeprefix("{").removesuffix("}")
+    strings = string.split(",")
+    for s in range(len(strings)):
+        strings[s] = strings[s].strip().removeprefix("'").removesuffix("'")
+    return set(strings)
+
+
+class File(BaseModel):
+    file_number: FileNumber
+    modification_type: pydriller.ModificationType
+    new_methods: set[str]
+    classes_used: set[str]
+
+    def __lt__(self, other: File) -> bool:
+        return self.file_number < other.file_number
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, File):
+            return NotImplemented
+        return self.file_number == other.file_number
+
+
 class Commit(BaseModel):
     number: int
-    files: list[FileNumber]
+    files: list[File]
+
+    @property
+    def file_numbers(self) -> list[FileNumber]:
+        return [file.file_number for file in self.files]
 
 
 class TransactionMap(BaseModel):
@@ -49,7 +76,7 @@ class Transactions(BaseModel):
 
     def first_occurrence(self, file_number: FileNumber) -> Optional[Commit]:
         for commit in self.commits:
-            if file_number in commit.files:
+            if file_number in commit.file_numbers:
                 return commit
         return None
 
@@ -70,7 +97,7 @@ class TransactionBuilder:
         self._name_map: dict[FileNumber, list[FileName]] = dict()
         self._transactions: list[Commit] = []
         self._mapping: dict[
-            pydriller.ModificationType, Callable[[FileName], Optional[FileNumber]]
+            pydriller.ModificationType, Callable[[FileName], Optional[File]]
         ] = {
             pydriller.ModificationType.ADD: self._add,
             pydriller.ModificationType.COPY: self._copy,
@@ -82,7 +109,7 @@ class TransactionBuilder:
         self._commit_number = 0
 
     def process(self, commit: list[FileChanges]):
-        items: list[FileNumber] = []
+        items: list[File] = []
         for file in commit:
             if not file["file"]:
                 continue  # empty commit
@@ -102,36 +129,72 @@ class TransactionBuilder:
     def _unknown(self, _: FileName) -> None:
         return None
 
-    def _add(self, file_name: FileName) -> FileNumber:
+    def _add(self, file_name: FileName) -> File:
         if file_name in self._id_map:
             return self._modify(file_name)
         self._id_counter = FileNumber(1 + self._id_counter)
         self._name_map[self._id_counter] = [file_name]
         self._id_map[file_name] = self._id_counter
-        return self._id_counter
+        return File(
+            file_number=self._id_counter,
+            modification_type=pydriller.ModificationType.ADD,
+            new_methods=set(),
+            classes_used=set(),
+        )
 
-    def _delete(self, file_name: FileName) -> FileNumber:
-        assert file_name in self._id_map
+    def _delete(self, file_name: FileName) -> File | None:
+        if file_name not in self._id_map:
+            return None
         id_number = self._id_map[file_name]
-        return id_number
+        return File(
+            file_number=id_number,
+            modification_type=pydriller.ModificationType.DELETE,
+            new_methods=set(),
+            classes_used=set(),
+        )
 
-    def _modify(self, file_name: FileName) -> FileNumber:
-        assert file_name in self._id_map
-        return self._id_map[file_name]
+    def _modify(self, file_name: FileName) -> File:
+        file_parts = file_name.split("|")
+        file_name = FileName(file_parts[0])
+        if len(file_parts) == 1:
+            new_methods, classes_used = set(), set()
+        else:
+            new_methods = logstr_to_set(file_parts[1])
+            classes_used = logstr_to_set(file_parts[2])
 
-    def _rename(self, file_name: FileName) -> FileNumber:
+        if file_name not in self._id_map:
+            return self._add(file_name)
+        return File(
+            file_number=self._id_map[file_name],
+            modification_type=pydriller.ModificationType.MODIFY,
+            new_methods=new_methods,
+            classes_used=classes_used,
+        )
+
+    def _rename(self, file_name: FileName) -> File | None:
         oldId, newId = map(FileName, file_name.split("|"))
-        assert oldId in self._id_map
+        if oldId not in self._id_map:
+            return None
         idNum = self._id_map[oldId]
         self._name_map[idNum].append(newId)
         self._id_map[newId] = idNum
-        return idNum
+        return File(
+            file_number=idNum,
+            modification_type=pydriller.ModificationType.MODIFY,
+            new_methods=set(),
+            classes_used=set(),
+        )
 
-    def _copy(self, file_name: FileName) -> FileNumber:
+    def _copy(self, file_name: FileName) -> File:
         self._id_counter = FileNumber(1 + self._id_counter)
         self._name_map[self._id_counter] = [file_name]
         self._id_map[file_name] = self._id_counter
-        return self._id_counter
+        return File(
+            file_number=self._id_counter,
+            modification_type=pydriller.ModificationType.MODIFY,
+            new_methods=set(),
+            classes_used=set(),
+        )
 
     def build(self) -> TransactionBuilderResult:
         return TransactionBuilderResult(
@@ -143,42 +206,6 @@ class TransactionBuilder:
 class TransactionLog(BaseModel):
     transactions: Transactions
     mapping: TransactionMap
-
-    def filter_on(self, filterer: Callable[[FileName], bool]) -> TransactionLog:
-        """Removes anything that does pass the filterer, and creates a new
-        TransactionLog without these entries
-
-        Args:
-            filterer (Callable[[FileName], bool]): The filterer which takes
-            the file_name as an argument
-
-        Returns (TransactionLog): The new TransactionLog with the filtered
-            entries
-        """
-        removed_ids = {
-            id
-            for id, names in self.mapping.id_to_names.items()
-            if not filterer(names[-1])
-        }
-
-        mapping = {
-            id: names
-            for id, names in self.mapping.id_to_names.items()
-            if id not in removed_ids
-        }
-        commit_id = 0
-        commits: list[Commit] = []
-        for commit in self.transactions.commits:
-            new_files = [file for file in commit.files if file not in removed_ids]
-            if not new_files:
-                continue
-
-            commits.append(Commit(number=commit_id, files=new_files))
-            commit_id += 1
-        return TransactionLog(
-            transactions=Transactions(commits=commits),
-            mapping=TransactionMap(id_to_names=mapping),
-        )
 
     @classmethod
     def aligned_commit_log(cls, rows: list[FileChanges]) -> Self:

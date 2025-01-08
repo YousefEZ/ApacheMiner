@@ -19,7 +19,7 @@ def visualize_project(binder: BindingStrategy):
         test_node = f"Test: {test.name}"
         graph.add_node(test_node, type="test")
 
-        for source_file in file_graph.links[test]:
+        for source_file in file_graph.test_to_source_links[test]:
             source_node = f"Source: {source_file.name}"
             graph.add_edge(test_node, source_node)
 
