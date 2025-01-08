@@ -9,7 +9,7 @@ from typing import Optional, Self, cast
 import rich.progress
 
 from src.discriminators.before_after_discriminator import TestStatistics
-from src.discriminators.binding.file_types import FileName, SourceFile
+from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.import_strategy import ImportStrategy
 from src.discriminators.binding.repository import JavaRepository
@@ -65,7 +65,6 @@ class Branch:
 
 class CommitLog:
     def __init__(self, changes: list[tuple[str, list[FileChanges]]]):
-        # TODO: restructure such that init doesn't contain logic
         self._commits = changes
         self._nodes: dict[str, CommitNode] = {}
         self._main_branch = self._make_tree()
@@ -232,34 +231,26 @@ class BranchDiscriminator(Discriminator):
 
     def process_branch(self, branch: Branch, graph: Graph) -> BranchResults:
         log = branch.make_log()
-
-        testing_subset = {
-            file
-            for file in graph.test_files
-            if file.name in log.mapping.name_to_id.keys()
+        testing_subset: set[TestFile] = {
+            file for file in graph.test_files if file.path in log.mapping.name_to_id
         }
-        source_subset = {
-            file
-            for file in graph.source_files
-            if file.name in log.mapping.name_to_id.keys()
+        source_subset: set[SourceFile] = {
+            file for file in graph.source_files if file.path in log.mapping.name_to_id
         }
-
         output = []
-
         for test in rich.progress.track(testing_subset):
             path = FileName(test.path)
-            file_number = self.transaction.mapping.name_to_id[path]
-            base_commit = self.transaction.transactions.first_occurrence(file_number)
+            file_number = log.mapping.name_to_id[path]
+            base_commit = log.transactions.first_occurrence(file_number)
             assert base_commit is not None, f"File not found {test.name} @ {path}"
             before, after = [], []
-
             for source_file in graph.links[test].intersection(source_subset):
                 path = FileName(source_file.path)
-                file_number = self.transaction.mapping.name_to_id[path]
+                file_number = log.mapping.name_to_id[path]
                 assert (
                     file_number is not None
                 ), f"File not found {source_file.name} @ {path}"
-                commit = self.transaction.transactions.first_occurrence(file_number)
+                commit = log.transactions.first_occurrence(file_number)
                 assert commit
                 if commit.number < base_commit.number:
                     before.append(source_file)
@@ -267,6 +258,7 @@ class BranchDiscriminator(Discriminator):
                     after.append(source_file)
             if before or after:
                 output.append(TestStatistics(test, before, after))
+
         stats = TotalBranchResults(test_statistics=output, source_files=source_subset)
         return BranchResults(
             branch=branch,
