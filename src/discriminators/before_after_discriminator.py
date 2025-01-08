@@ -9,7 +9,12 @@ from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
 from src.discriminators.file_types import FileChanges
-from src.discriminators.transaction import TransactionLog, TransactionMap, Transactions
+from src.discriminators.transaction import (
+    TransactionBuilder,
+    TransactionLog,
+    TransactionMap,
+    Transactions,
+)
 
 
 console = rich.console.Console()
@@ -53,9 +58,14 @@ class BeforeAfterStatistics(Statistics):
 
 @dataclass(frozen=True)
 class BeforeAfterDiscriminator(Discriminator):
-    transaction: TransactionLog
-    file_binder: BindingStrategy
     commit_data: list[FileChanges]
+    file_binder: BindingStrategy
+
+    @cached_property
+    def transaction(self) -> TransactionLog:
+        return TransactionBuilder.build_from_groups(
+            TransactionBuilder.group_file_changes(self.commit_data)
+        )
 
     @property
     def statistics(self) -> BeforeAfterStatistics:
@@ -87,11 +97,9 @@ class BeforeAfterDiscriminator(Discriminator):
         return BeforeAfterStatistics(test_statistics=output, graph=graph)
 
 
-
 if __name__ == "__main__":
     with open("transactions.txt") as t, open("mapping.json") as m:
         transactions = Transactions.model_validate(json.load(t))
         mapping = TransactionMap.model_validate(json.load(m))
 
     transaction_log = TransactionLog(transactions=transactions, mapping=mapping)
-

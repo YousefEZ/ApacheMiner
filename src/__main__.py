@@ -329,12 +329,9 @@ def run_discriminator(
 
     with open(OUTPUT_FILE, "r") as f:
         data = cast(list[FileChanges], list(csv.DictReader(f)))
-        transaction_log = transaction.TransactionLog.from_commit_log(data)
 
     binding_strategy = strategy_factory[binding](JavaRepository(dir))
-    discriminator = discriminator_factory[discriminator_type](
-        transaction_log, binding_strategy
-    )
+    discriminator = discriminator_factory[discriminator_type](data, binding_strategy)
     statistics = discriminator.statistics
 
     console.print(statistics.output())
