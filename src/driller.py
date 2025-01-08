@@ -1,5 +1,6 @@
 import csv
 import json
+import re
 from typing import Generator, NamedTuple, Optional, Sequence
 
 import pydriller
@@ -44,15 +45,71 @@ def fetch_number_of_commits(url: str) -> Optional[int]:
     return None
 
 
-def get_commit_count(path: str) -> int:
-    if pydriller.Repository._is_remote(path):
-        commits = fetch_number_of_commits(path)
-        assert commits is not None, "Failed to fetch commit count"
-        return commits
+def get_defined_method(line: str) -> Optional[str]:
+    pattern = (
+        r"^\s*(public|private|protected)\s+(?:static\s+)?(?:final\s+)"
+        + r"?[\w<>[\],\s]+\s+\w+\s*\([^)]*\)"
+    )
+    if bool(re.match(pattern, line)):
+        match = re.match(pattern, line)
+        if match is None:
+            return None
+        method_parts = line[match.span()[0] : match.span()[1]].split()
+        for i, part in enumerate(method_parts):
+            if "(" in part:
+                if part.startswith("("):
+                    method_name = method_parts[i - 1]
+                    # function (internal) or function ( internal )
+                else:
+                    method_name = method_parts[i].split("(")[0]
+                # function(internal) or function( internal )
+        return method_name
+    return None
 
-    repo = Repo(path)
-    branch = repo.active_branch
-    return sum(1 for _ in repo.iter_commits(branch))
+
+def get_classes_used(diffs: dict[str, list[tuple[int, str]]]) -> set[str]:
+    new_lines: list[tuple[int, str]] = diffs["added"]
+    # Match patterns like: new ClassName() or ClassName.method()
+    class_pattern = r"(?:new\s+(\w+)|(\w+)\.[\w<>]+\()"
+    classes_referenced = set()
+    for _, line in new_lines:
+        matches = re.finditer(class_pattern, line)
+        for match in matches:
+            # Group 1 is from 'new ClassName()'
+            # Group 2 is from 'ClassName.method()'
+            class_name = match.group(1) or match.group(2)
+            if class_name:
+                classes_referenced.add(class_name)
+    return classes_referenced
+
+
+def get_new_methods(diffs: dict[str, list[tuple[int, str]]]) -> set[str]:
+    added_content = diffs["added"]
+    deleted_content = diffs["deleted"]
+    plus_methods: set[str] = set()
+    minus_methods: set[str] = set()
+    for _, line in added_content:
+        method_defined = get_defined_method(line)
+        if method_defined is not None:
+            plus_methods.add(method_defined)
+    for _, line in deleted_content:
+        method_defined = get_defined_method(line)
+        if method_defined is not None:
+            minus_methods.add(method_defined)
+    return plus_methods - minus_methods
+
+
+def modify_return(file: ModifiedFileProtocol, delimiter: str) -> str:
+    assert file.new_path
+    if file.new_path.endswith(".java"):
+        added_methods = get_new_methods(file.diff_parsed)
+        if len(added_methods) > 0:
+            classes_referenced = get_classes_used(file.diff_parsed)
+            return (
+                f"{file.new_path}{delimiter}"
+                + f"{added_methods}{delimiter}{classes_referenced}"
+            )
+    return file.new_path
 
 
 def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
@@ -64,12 +121,25 @@ def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
     elif (
         file.change_type == pydriller.ModificationType.ADD
         or file.change_type == pydriller.ModificationType.COPY
-        or file.change_type == pydriller.ModificationType.MODIFY
         or file.change_type == pydriller.ModificationType.UNKNOWN
     ):
         assert file.new_path
         return file.new_path
-    assert False, f"Unsupported change type: {file.change_type}"
+    elif file.change_type == pydriller.ModificationType.MODIFY:
+        return modify_return(file, delimiter)
+
+    assert False, f"Unknown change type: {file.change_type}"
+
+
+def get_commit_count(path: str) -> int:
+    if pydriller.Repository._is_remote(path):
+        commits = fetch_number_of_commits(path)
+        assert commits is not None, "Failed to fetch commit count"
+        return commits
+
+    repo = Repo(path)
+    branch = repo.active_branch
+    return sum(1 for _ in repo.iter_commits(branch))
 
 
 def get_repo_information(path: str) -> RemoteRepositoryInformation:

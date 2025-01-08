@@ -280,22 +280,36 @@ def association(
     "--binding", "-b", type=click.Choice(list(strategy_factory.keys())), required=True
 )
 @click.option("--reverse-squash", "-e", type=bool, is_flag=True, default=False)
+@click.option("--save", "-s", is_flag=True, help="Save the repository for reuse")
 def discriminate(
     url: Optional[str],
     path: Optional[str],
     discriminator_type: DiscriminatorTypes,
     binding: Strategies,
     reverse_squash: bool,
+    save: bool,
 ) -> None:
     assert url or path, "Either URL or Path must be provided"
 
     if url:
-        with tempfile.TemporaryDirectory() as dir:
-            console.print(f"Cloning repository from {url}")
-            git.Repo.clone_from(url=url, to_path=dir)
+        if save:
+            assert path, "Path must be provided to save the repository"
+            assert not os.path.exists(path), "Path must not exist"
+            assert url, "URL must be provided to clone the repository"
 
+            console.print(f"Cloning repository from {url}")
+            os.makedirs(path)
+            git.Repo.clone_from(url=url, to_path=path)
             console.print("Repository cloned")
-            run_discriminator(dir, discriminator_type, binding, reverse_squash)
+
+            run_discriminator(path, discriminator_type, binding, reverse_squash)
+        else:
+            with tempfile.TemporaryDirectory() as dir:
+                console.print(f"Cloning repository from {url}")
+                git.Repo.clone_from(url=url, to_path=dir)
+                console.print("Repository cloned")
+
+                run_discriminator(dir, discriminator_type, binding, reverse_squash)
     elif path:
         run_discriminator(path, discriminator_type, binding, reverse_squash)
 
@@ -306,12 +320,12 @@ def run_discriminator(
     binding: Strategies,
     reverse_squash: bool,
 ) -> None:
-    OUTPUT_FILE = f"{dir}/dump.csv"
-    console.print(f"Drilling repository from {dir}")
-
-    with rich.progress.Progress() as progress:
-        driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
-    console.print("Repository drilled")
+    OUTPUT_FILE = f"{dir}/commits.csv"
+    if not os.path.exists(OUTPUT_FILE):
+        console.print(f"Drilling repository from {dir}")
+        with rich.progress.Progress() as progress:
+            driller.drill_repository(dir, OUTPUT_FILE, progress, reverse_squash)
+        console.print("Repository drilled")
 
     with open(OUTPUT_FILE, "r") as f:
         data = cast(list[FileChanges], list(csv.DictReader(f)))
