@@ -11,7 +11,7 @@ from urllib3 import request
 
 from src.custom_types.commit import CommitProtocol, ModifiedFileProtocol
 from src.discriminators.transaction import modification_map
-from src.squash_reverse import expand_squash_merge, get_squash_merges
+from src.squash_reverse import UnSquashedCommit, expand_squash_merge, get_squash_merges
 
 
 class RemoteRepositoryInformation(NamedTuple):
@@ -107,8 +107,13 @@ def stiched_commits(
     for commit in pydriller.Repository(path, order="topo-order").traverse_commits():
         if commit.hash in hash_to_commits:
             yield from hash_to_commits[commit.hash]
-
-        yield commit
+            yield UnSquashedCommit(
+                [],
+                commit.hash,
+                commit.parents + [hash_to_commits[commit.hash][-1].hash],
+            )
+        else:
+            yield commit
 
 
 def drill_repository(
