@@ -102,6 +102,9 @@ class TransactionBuilder:
     def _unknown(self, _: FileName) -> None:
         return None
 
+    def _delete(self, _: FileName) -> FileNumber | None:
+        return None
+
     def _add(self, file_name: FileName) -> FileNumber:
         if file_name in self._id_map:
             return self._modify(file_name)
@@ -110,24 +113,19 @@ class TransactionBuilder:
         self._id_map[file_name] = self._id_counter
         return self._id_counter
 
-    def _delete(self, file_name: FileName) -> FileNumber | None:
-        return None
-        assert file_name in self._id_map
-        id_number = self._id_map[file_name]
-        return id_number
-
     def _modify(self, file_name: FileName) -> FileNumber:
         if file_name not in self._id_map:
             return self._add(file_name)
         return self._id_map[file_name]
 
     def _rename(self, file_name: FileName) -> FileNumber:
-        oldId, newId = map(FileName, file_name.split("|"))
-        assert oldId in self._id_map
-        idNum = self._id_map[oldId]
-        self._name_map[idNum].append(newId)
-        self._id_map[newId] = idNum
-        return idNum
+        old_name, new_name = map(FileName, file_name.split("|"))
+        if old_name not in self._id_map:
+            self._add(old_name)
+        id_num = self._id_map[old_name]
+        self._name_map[id_num].append(new_name)
+        self._id_map[new_name] = id_num
+        return id_num
 
     def _copy(self, file_name: FileName) -> FileNumber:
         self._id_counter = FileNumber(1 + self._id_counter)
