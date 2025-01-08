@@ -108,6 +108,27 @@ class TransactionBuilder:
         }
         self._commit_number = 0
 
+    @staticmethod
+    def group_file_changes(
+        changes: list[FileChanges],
+    ) -> list[tuple[str, list[FileChanges]]]:
+        return [
+            (commit, list(changes))
+            for commit, changes in itertools.groupby(
+                changes, operator.itemgetter("hash")
+            )
+        ]
+
+    @staticmethod
+    def build_from_groups(
+        commits: list[tuple[str, list[FileChanges]]],
+    ) -> TransactionLog:
+        builder = TransactionBuilder()
+        for _, changes in commits:
+            builder.process(changes)
+        result = builder.build()
+        return TransactionLog(transactions=result.transactions, mapping=result.mapping)
+
     def process(self, commit: list[FileChanges]):
         items: list[File] = []
         for file in commit:
