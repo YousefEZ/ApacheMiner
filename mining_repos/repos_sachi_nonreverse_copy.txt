@@ -1,8 +1,0 @@
-https://github.com/apache/iotdb
-https://github.com/apache/geronimo
-https://github.com/apache/accumulo
-https://github.com/apache/ant
-https://github.com/apache/jmeter
-https://github.com/apache/wicket
-https://github.com/apache/ignite
-https://github.com/apache/solr
