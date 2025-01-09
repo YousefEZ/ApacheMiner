@@ -10,8 +10,8 @@ from pydriller import ModificationType
 from .binding.file_types import FileName, SourceFile
 from .binding.strategy import BindingStrategy
 from .discriminator import Discriminator, Statistics
-from .file_types import FileNumber
-from .transaction import Commit, File, TransactionLog
+from .file_types import FileChanges, FileNumber
+from .transaction import Commit, File, TransactionBuilder, TransactionLog
 
 console = rich.console.Console()
 TPM = 100000
@@ -49,8 +49,14 @@ class TestedFirstStatistics(Statistics):
 
 @dataclass(frozen=True)
 class LLMDiscriminator(Discriminator):
-    transaction: TransactionLog
+    commit_data: list[FileChanges]
     file_binder: BindingStrategy
+
+    @cached_property
+    def transaction(self) -> TransactionLog:
+        return TransactionBuilder.build_from_groups(
+            TransactionBuilder.group_file_changes(self.commit_data)
+        )
 
     def adds_features(self, file_commit_info: File) -> bool:
         """Does this commit add new methods to the file?"""

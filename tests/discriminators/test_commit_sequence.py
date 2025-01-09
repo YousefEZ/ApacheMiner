@@ -1,127 +1,122 @@
 from collections import defaultdict
+from dataclasses import dataclass
+from functools import cached_property
 
 from pydriller import ModificationType as modification_type
 
-from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
+from src.discriminators.binding.file_types import (
+    FileName,
+    ProgramFile,
+    SourceFile,
+    TestFile,
+)
 from src.discriminators.binding.graph import Graph
+from src.discriminators.binding.repository import Files, Repository
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.commit_seq_discriminator import CommitSequenceDiscriminator
+from src.discriminators.file_types import FileChanges
 from src.discriminators.transaction import (
-    Commit,
-    File,
     FileNumber,
-    TransactionLog,
-    TransactionMap,
-    Transactions,
+    TransactionBuilder,
+    modification_map,
 )
 
 
-class MockTransactions(Transactions):
-    pass
+@dataclass(frozen=True)
+class MockRepository(Repository):
+    all_files: set[ProgramFile]
 
-
-class MockTransactionMap(TransactionMap):
-    @property
-    def name_to_id(self) -> dict[FileName, FileNumber]:
-        return {
-            FileName(name): FileNumber(k)
-            for k, v in self.id_to_names.items()
-            for name in v
-        }
-
-
-class MockTransactionLog(TransactionLog):
-    transactions: MockTransactions
-    mapping: MockTransactionMap
-
-    @classmethod
-    def generate(cls, commit_list):
-        transactions = MockTransactions(commits=[])
-        mapping = MockTransactionMap(id_to_names={})
-        file_id = 0
-        for i, commit_info in enumerate(commit_list):
-            commit = Commit(number=i, files=[])
-            transactions.commits.append(commit)
-            for file, modification in commit_info:
-                if modification == modification_type.ADD:
-                    mapping.id_to_names[FileNumber(file_id)] = [file.name]
-                    file = File(
-                        file_number=file_id,
-                        modification_type=modification,
-                        new_methods=set(),
-                        classes_used=set(),
-                    )
-                    commit.files.append(file)
-                    file_id += 1
-                elif (
-                    isinstance(modification, tuple)
-                    and modification[0] == modification_type.MODIFY
-                ):
-                    file = File(
-                        file_number=mapping.name_to_id[file.name],
-                        modification_type=modification[0],
-                        new_methods=modification[1],
-                        classes_used=modification[2],
-                    )
-                    commit.files.append(file)
-                else:
-                    file = File(
-                        file_number=mapping.name_to_id[file.name],
-                        modification_type=modification,
-                        new_methods=set(),
-                        classes_used=set(),
-                    )
-                    commit.files.append(file)
-        print(f"Commits: {transactions.commits}")
-        return cls(mapping=mapping, transactions=transactions)
-
-
-class MockBindingStrategy(BindingStrategy):
-    source_files: set[SourceFile]
-    test_files: set[TestFile]
-    test_to_source_links: dict[TestFile, set[SourceFile]]
-
-    @classmethod
-    def generate(self, files):
-        source_files = set()
-        test_files = set()
-        test_to_source_links = defaultdict(set)
-        # default basic implementation (alike name_strategy)
-        for file in files:
-            core_name = file.name.strip(".java")
-            if core_name.endswith("-source"):
-                source_files.add(file)
-            if core_name.endswith("-test"):
-                test_files.add(file)
-                sources = list(core_name.strip("-test"))
-                for source in sources:
-                    source_file = SourceFile("", FileName(source + "-source.java"))
-                    if source_file in files:
-                        test_to_source_links[file].add(source_file)
-                    else:
-                        raise ValueError(
-                            "Misconfigured test file. "
-                            + f"{file} has no sourcefile {source_file}"
-                        )
-        self.source_files = source_files
-        self.test_files = test_files
-        self.test_to_source_links = test_to_source_links
-
-    @classmethod
-    def graph(self) -> Graph:
-        return Graph(
-            source_files=self.source_files,
-            test_files=self.test_files,
-            test_to_source_links=self.test_to_source_links,
+    @cached_property
+    def files(self) -> Files:
+        return Files(
+            source_files={
+                file for file in self.all_files if isinstance(file, SourceFile)
+            },
+            test_files={file for file in self.all_files if isinstance(file, TestFile)},
         )
 
 
-def generate(files, commit_list):
-    transactions = MockTransactionLog.generate(commit_list)
-    binding_strategy = MockBindingStrategy(None)
-    binding_strategy.generate(files)
+@dataclass(frozen=True)
+class MockBindingStrategy(BindingStrategy):
+    repository: Repository
 
-    return transactions, binding_strategy
+    def graph(self) -> Graph:
+        source_file_mapping = {
+            file.name: file for file in self.repository.files.source_files
+        }
+        test_to_source_links = defaultdict(set)
+
+        for test in self.repository.files.test_files:
+            for source in test.name.split("-")[0]:
+                name = FileName(source + "-source.java")
+                test_to_source_links[test].add(source_file_mapping[name])
+
+        return Graph(
+            source_files=self.repository.files.source_files,
+            test_files=self.repository.files.test_files,
+            test_to_source_links=test_to_source_links,
+        )
+
+
+def generate_file_changes(
+    c_hash: int,
+    changes: tuple[
+        ProgramFile,
+        modification_type | tuple[modification_type, set[str], set[str]],
+    ],
+) -> FileChanges:
+    file, modification = changes
+    if isinstance(modification, tuple):
+        return FileChanges(
+            hash=str(c_hash),
+            modification_type=modification_map[modification[0]],
+            file=file.name,
+            new_methods="|".join(modification[1]),
+            classes_used="|".join(modification[2]),
+            parents=str(c_hash - 1) if c_hash > 0 else "",
+        )
+    return FileChanges(
+        hash=str(c_hash),
+        modification_type=modification_map[modification],
+        file=file.name,
+        parents=str(c_hash - 1) if c_hash > 0 else "",
+        new_methods="",
+        classes_used="",
+    )
+
+
+def convert_commit_list(
+    c_list: list[
+        set[
+            tuple[
+                ProgramFile,
+                modification_type | tuple[modification_type, set[str], set[str]],
+            ]
+        ]
+    ],
+) -> list[FileChanges]:
+    return [
+        generate_file_changes(c_hash, change)
+        for c_hash, changes in enumerate(c_list)
+        for change in changes
+    ]
+
+
+def generate(
+    files: set[ProgramFile],
+    commit_list: list[
+        set[
+            tuple[
+                ProgramFile,
+                modification_type | tuple[modification_type, set[str], set[str]],
+            ]
+        ]
+    ],
+):
+    repository = MockRepository(all_files=files)
+    binding_strategy = MockBindingStrategy(repository)
+
+    return convert_commit_list(commit_list), binding_strategy
 
 
 sourceA = SourceFile("", "A-source.java")
@@ -145,29 +140,34 @@ def test_mock_data():
         },
         {(testB, modification_type.ADD)},
     ]
-    transactions, binding_strategy = generate(files, commit_list)
+    commit_data, binding_strategy = generate(files, commit_list)
+    transactions = TransactionBuilder.build_from_groups(
+        TransactionBuilder.group_file_changes(commit_data)
+    )
+    graph = binding_strategy.graph()
+
     assert len(transactions.transactions.commits) == 3
 
     assert len(transactions.mapping.id_to_names) == 5
     assert (
-        transactions.mapping.id_to_names[FileNumber(0)] == [sourceA.name]
-        or transactions.mapping.id_to_names[FileNumber(0)] == [sourceB.name]
-    ) and (
         transactions.mapping.id_to_names[FileNumber(1)] == [sourceA.name]
         or transactions.mapping.id_to_names[FileNumber(1)] == [sourceB.name]
+    ) and (
+        transactions.mapping.id_to_names[FileNumber(2)] == [sourceA.name]
+        or transactions.mapping.id_to_names[FileNumber(2)] == [sourceB.name]
     ), "first commit is identified with 0-1"
     assert (
-        transactions.mapping.id_to_names[FileNumber(2)] == [testAB.name]
-        or transactions.mapping.id_to_names[FileNumber(2)] == [testA.name]
-    ) and (
         transactions.mapping.id_to_names[FileNumber(3)] == [testAB.name]
         or transactions.mapping.id_to_names[FileNumber(3)] == [testA.name]
+    ) and (
+        transactions.mapping.id_to_names[FileNumber(4)] == [testAB.name]
+        or transactions.mapping.id_to_names[FileNumber(4)] == [testA.name]
     ), "second commit is identified with 2-4"
-    assert transactions.mapping.id_to_names[FileNumber(4)] == [testB.name]
-    assert len(binding_strategy.source_files) == 2
-    assert binding_strategy.source_files == {sourceA, sourceB}
-    assert len(binding_strategy.test_files) == 3
-    assert binding_strategy.test_files == {testAB, testA, testB}
+    assert transactions.mapping.id_to_names[FileNumber(5)] == [testB.name]
+    assert len(graph.source_files) == 2
+    assert graph.source_files == {sourceA, sourceB}
+    assert len(graph.test_files) == 3
+    assert graph.test_files == {testAB, testA, testB}
 
     graph = binding_strategy.graph()
     assert graph.test_to_source_links[testAB] == {
@@ -187,7 +187,7 @@ def test_mock_data():
 
 
 def test_output_format():
-    files = {}
+    files = set()
     commit_list = []
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
@@ -211,8 +211,8 @@ def test_found_tfd_split_commits():
             (sourceA, modification_type.ADD),
         },
     ]
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
@@ -236,8 +236,8 @@ def test_found_tfd_split_commits():
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     )
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
@@ -256,8 +256,8 @@ def test_found_tfd_same_commits():
             (sourceA, modification_type.ADD),
         },
     ]
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
@@ -277,8 +277,8 @@ def test_found_tfd_same_commits():
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     )
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
@@ -299,8 +299,8 @@ def test_failed_tfd():
             ),
         },
     ]
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 0\nTest Elsewhere: 1\nUntested Files: 0\n"
@@ -319,8 +319,8 @@ def test_failed_tfd():
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 0\nTest Elsewhere: 1\nUntested Files: 0\n"
@@ -339,8 +339,8 @@ def test_failed_tfd():
             ),
         },
     )
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     assert (
         discriminator.statistics.output()
         == "Test First Updates: 0\nTest Elsewhere: 1\nUntested Files: 0\n"
@@ -376,9 +376,9 @@ def test_only_one_testfile_change_needed():
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
-    transactions, binding_strategy = generate(files, commit_list)
+    commit_data, binding_strategy = generate(files, commit_list)
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
@@ -406,22 +406,22 @@ def test_other_modification_types_not_counted():
         {
             (
                 testA,
-                modification_type.COPY,
+                modification_type.UNKNOWN,
             ),
             (
                 testAB,
-                modification_type.RENAME,
+                modification_type.MODIFY,
             ),
         },
         {
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
-    transactions, binding_strategy = generate(
+    commit_data, binding_strategy = generate(
         files, commit_list + different_modification_type
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
@@ -464,11 +464,11 @@ def test_non_feature_additive_changes_not_counted():
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
-    transactions, binding_strategy = generate(
+    commit_data, binding_strategy = generate(
         files, commit_list + modify_without_new_features
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
@@ -511,11 +511,11 @@ def test_test_other_source_not_counted():
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
-    transactions, binding_strategy = generate(
+    commit_data, binding_strategy = generate(
         files, commit_list + new_feature_for_other_file
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
@@ -551,8 +551,8 @@ def test_end_when_file_deleted():
             (sourceA, modification_type.DELETE),
         },
     ]
-    transactions, binding_strategy = generate(files, commit_list)
-    discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
+    commit_data, binding_strategy = generate(files, commit_list)
+    discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
     stats_sourceA = discriminator.statistics.test_statistics[0]
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:

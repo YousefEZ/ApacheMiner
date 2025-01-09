@@ -6,6 +6,8 @@ class FileChanges(TypedDict):
     modification_type: str
     file: str
     parents: str
+    new_methods: str
+    classes_used: str
 
 
 FileNumber = NewType("FileNumber", int)
