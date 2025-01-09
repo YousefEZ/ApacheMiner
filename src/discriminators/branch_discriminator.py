@@ -244,7 +244,9 @@ class BranchDiscriminator(Discriminator):
             base_commit = log.transactions.first_occurrence(file_number)
             assert base_commit is not None, f"File not found {test.name} @ {path}"
             before, after = [], []
-            for source_file in graph.links[test].intersection(source_subset):
+            for source_file in graph.test_to_source_links[test].intersection(
+                source_subset
+            ):
                 path = FileName(source_file.path)
                 file_number = log.mapping.name_to_id[path]
                 assert (
@@ -272,7 +274,7 @@ class BranchDiscriminator(Discriminator):
         graph = self.file_binder.graph()
         print(f"Graph has {len(graph.test_files)} test files")
         print(f"Graph has {len(graph.source_files)} source files")
-        print(f"Graph has {len(graph.links)} links")
+        print(f"Graph has {len(graph.test_to_source_links)} links")
         log = CommitLog(
             [
                 (commit_hash, list(changes))
