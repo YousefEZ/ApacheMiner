@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+import sys
 import tempfile
 from itertools import chain
 from typing import Optional, ParamSpec, cast
@@ -49,7 +50,11 @@ def fetch(): ...
 @click.option("--dir", "-d", type=click.Path(), required=True)
 @click.argument("targets", type=str, nargs=-1)
 def clone(dir: str, targets: list[str]) -> None:
-    stdin_targets = click.get_text_stream("stdin").read().splitlines()
+    stdin_targets = (
+        click.get_text_stream("stdin").read().splitlines()
+        if not sys.stdin.isatty()
+        else tuple()
+    )
     for idx, repo in enumerate(
         (
             target
