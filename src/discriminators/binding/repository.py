@@ -54,9 +54,11 @@ class JavaRepository(Repository):
         }
 
     def is_test(self, file: ProgramFile) -> bool:
-        with open(os.path.join(file.project, file.path)) as f:
-            return "@Test" in f.read()
-
+        for line in file.get_source_code():
+            if "@Test" in line:
+                return True
+        return False
+        
     @cached_property
     def tests(self) -> set[TestFile]:
         return {
