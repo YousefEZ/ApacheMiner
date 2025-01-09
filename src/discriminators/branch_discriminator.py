@@ -11,7 +11,7 @@ from src.discriminators.before_after_discriminator import TestStatistics
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.binding.repositories.java import JavaRepository
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
 from src.discriminators.file_types import FileChanges

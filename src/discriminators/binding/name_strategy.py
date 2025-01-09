@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.repository import Repository
+from src.discriminators.binding.repositories.repository import Repository
 from src.discriminators.binding.strategy import BindingStrategy
 
 

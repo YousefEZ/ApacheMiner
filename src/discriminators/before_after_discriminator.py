@@ -1,4 +1,3 @@
-import json
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -12,8 +11,6 @@ from src.discriminators.file_types import FileChanges
 from src.discriminators.transaction import (
     TransactionBuilder,
     TransactionLog,
-    TransactionMap,
-    Transactions,
 )
 
 console = rich.console.Console()
@@ -94,11 +91,3 @@ class BeforeAfterDiscriminator(Discriminator):
             if before or after:
                 output.append(TestStatistics(test, before, after))
         return BeforeAfterStatistics(test_statistics=output, graph=graph)
-
-
-if __name__ == "__main__":
-    with open("transactions.txt") as t, open("mapping.json") as m:
-        transactions = Transactions.model_validate(json.load(t))
-        mapping = TransactionMap.model_validate(json.load(m))
-
-    transaction_log = TransactionLog(transactions=transactions, mapping=mapping)

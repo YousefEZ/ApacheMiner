@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.binding.repositories.java import JavaRepository
 from src.discriminators.binding.strategy import BindingStrategy
 
 
