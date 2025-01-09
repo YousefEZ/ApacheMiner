@@ -18,9 +18,8 @@ from src.discriminators.file_types import FileChanges
 from src.discriminators.transaction import (
     FileNumber,
     TransactionBuilder,
+    modification_map,
 )
-
-from src.discriminators.transaction import modification_map
 
 
 @dataclass(frozen=True)
