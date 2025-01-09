@@ -1,7 +1,6 @@
 import csv
 import json
-import re
-from typing import Generator, NamedTuple, Optional, Sequence
+from typing import Generator, NamedTuple, Optional, Sequence, Type
 
 import pydriller
 import rich
@@ -12,6 +11,11 @@ from urllib3 import request
 
 from src.custom_types.commit import CommitProtocol, ModifiedFileProtocol
 from src.discriminators.transaction import modification_map
+from src.discriminators.binding.repositories.languages.factory import (
+    get_repository_language,
+    language_factory,
+)
+from src.discriminators.binding.repositories.languages.language import Language
 from src.squash_reverse import UnSquashedCommit, expand_squash_merge, get_squash_merges
 
 
@@ -45,76 +49,42 @@ def fetch_number_of_commits(url: str) -> Optional[int]:
     return None
 
 
-def get_defined_method(line: str) -> Optional[str]:
-    pattern = (
-        r"^\s*(public|private|protected)\s+(?:static\s+)?(?:final\s+)"
-        + r"?[\w<>[\],\s]+\s+\w+\s*\([^)]*\)"
-    )
-    if bool(re.match(pattern, line)):
-        match = re.match(pattern, line)
-        if match is None:
-            return None
-        method_parts = line[match.span()[0] : match.span()[1]].split()
-        method_name: Optional[str] = None
-        for i, part in enumerate(method_parts):
-            if "(" in part:
-                if part.startswith("("):
-                    method_name = method_parts[i - 1]
-                    # function (internal) or function ( internal )
-                else:
-                    method_name = method_parts[i].split("(")[0]
-                # function(internal) or function( internal )
-        assert method_name is not None, f"Method name not found in line: {line}"
-        return method_name
-    return None
-
-
-def get_classes_used(diffs: dict[str, list[tuple[int, str]]]) -> set[str]:
-    new_lines: list[tuple[int, str]] = diffs["added"]
-    # Match patterns like: new ClassName() or ClassName.method()
-    class_pattern = r"(?:new\s+(\w+)|(\w+)\.[\w<>]+\()"
-    classes_referenced = set()
-    for _, line in new_lines:
-        matches = re.finditer(class_pattern, line)
-        for match in matches:
-            # Group 1 is from 'new ClassName()'
-            # Group 2 is from 'ClassName.method()'
-            class_name = match.group(1) or match.group(2)
-            if class_name:
-                classes_referenced.add(class_name)
-    return classes_referenced
-
-
-def get_new_methods(diffs: dict[str, list[tuple[int, str]]]) -> set[str]:
+def get_new_methods(
+    diffs: dict[str, list[tuple[int, str]]], language: Type[Language]
+) -> set[str]:
     added_content = diffs["added"]
     deleted_content = diffs["deleted"]
     plus_methods: set[str] = set()
     minus_methods: set[str] = set()
     for _, line in added_content:
-        method_defined = get_defined_method(line)
+        method_defined = language.get_defined_method(line)
         if method_defined is not None:
             plus_methods.add(method_defined)
     for _, line in deleted_content:
-        method_defined = get_defined_method(line)
+        method_defined = language.get_defined_method(line)
         if method_defined is not None:
             minus_methods.add(method_defined)
     return plus_methods - minus_methods
 
 
-def get_new_methods_from_file(file: ModifiedFileProtocol, delimiter: str) -> str:
+def get_new_methods_from_file(
+    file: ModifiedFileProtocol, delimiter: str, language: Type[Language]
+) -> str:
     if file.change_type == pydriller.ModificationType.MODIFY:
         assert file.new_path is not None
-        if file.new_path.endswith(".java"):
-            added_methods = get_new_methods(file.diff_parsed)
+        if file.new_path.endswith(language.SUFFIX):
+            added_methods = get_new_methods(file.diff_parsed, language)
             return delimiter.join(added_methods)
     return ""
 
 
-def get_classes_used_from_file(file: ModifiedFileProtocol, delimiter: str) -> str:
+def get_classes_used_from_file(
+    file: ModifiedFileProtocol, delimiter: str, language: Type[Language]
+) -> str:
     if file.change_type == pydriller.ModificationType.MODIFY:
         assert file.new_path is not None
-        if file.new_path.endswith(".java"):
-            classes_referenced = get_classes_used(file.diff_parsed)
+        if file.new_path.endswith(language.SUFFIX):
+            classes_referenced = language.get_classes_used(file.diff_parsed)
             return delimiter.join(classes_referenced)
     return ""
 
@@ -202,6 +172,11 @@ def drill_repository(
     delimiter: str = "|",
 ) -> None:
     commit_count = get_commit_count(path)
+    repo_information = get_repo_information(path)
+    language = language_factory[
+        get_repository_language(f"{repo_information.org}/{repo_information.name}")
+    ]
+
     with open(output_file, "w") as f:
         task = progress.add_task(
             f"Fetching commits for [cyan]{path}[/cyan]", total=commit_count
@@ -240,8 +215,12 @@ def drill_repository(
                         "parents": delimiter.join(commit.parents),
                         "file": format_file(file, delimiter),
                         "modification_type": modification_map[file.change_type],
-                        "new_methods": get_new_methods_from_file(file, delimiter),
-                        "classes_used": get_classes_used_from_file(file, delimiter),
+                        "new_methods": get_new_methods_from_file(
+                            file, delimiter, language
+                        ),
+                        "classes_used": get_classes_used_from_file(
+                            file, delimiter, language
+                        ),
                     }
                 )
 
