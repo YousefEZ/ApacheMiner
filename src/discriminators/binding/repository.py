@@ -48,7 +48,7 @@ class JavaRepository(Repository):
     def source_files(self) -> set[SourceFile]:
         return {
             SourceFile(project=file.project, path=file.path)
-            for file in self.all_files - self.tests
+            for file in self.all_files.difference(self.tests)
         }
 
     def is_test(self, file: ProgramFile) -> bool:
