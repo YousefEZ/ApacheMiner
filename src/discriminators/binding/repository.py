@@ -50,7 +50,7 @@ class JavaRepository(Repository):
         return {
             SourceFile(project=file.project, path=file.path)
             for file in self.all_files
-            if file.path not test_paths
+            if file.path not in test_paths
         }
 
     def is_test(self, file: ProgramFile) -> bool:
