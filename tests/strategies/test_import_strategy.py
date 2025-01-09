@@ -1,15 +1,17 @@
 import os.path
 from dataclasses import dataclass
 from functools import cached_property
-from typing import override
+from typing import Type, override
 
 from src.discriminators.binding import file_types
 from src.discriminators.binding.import_strategy import ImportStrategy
-from src.discriminators.binding.repository import (
+from src.discriminators.binding.repositories.languages.java import JavaLanguage
+from src.discriminators.binding.repositories.languages.language import Language
+from src.discriminators.binding.repositories.repository import (
     SOURCE_DIR,
     TEST_DIR,
     Files,
-    Repository,
+    RepositoryProtocol,
 )
 
 PROJECT_PATH = "/home/"
@@ -17,9 +19,13 @@ SOURCE_PATH = os.path.join("/home/", SOURCE_DIR, "org/package/")
 TEST_PATH = os.path.join("/home/", TEST_DIR, "org/package/")
 
 
-class MockRepository(Repository):
+class MockRepository(RepositoryProtocol):
     def __init__(self, files: Files) -> None:
         self._files = files
+
+    @property
+    def language(self) -> Type[Language]:
+        return JavaLanguage
 
     @cached_property
     def files(self) -> Files:
@@ -57,7 +63,7 @@ class MockTestFile(file_types.TestFile):
 
 
 def generate_source_code(imports: list[file_types.SourceFile]) -> list[str]:
-    return [f"import {ImportStrategy.import_name_of(import_)};" for import_ in imports]
+    return [f"import {JavaLanguage.import_name_of(import_)};" for import_ in imports]
 
 
 def generate_test_code(imports: list[file_types.SourceFile]) -> list[str]:
@@ -98,11 +104,11 @@ def generate_test_file(name: str, source_code: list[str]) -> MockTestFile:
 
 def test_correct_import_name():
     source_file = generate_source_file("A.java", [])
-    assert ImportStrategy.import_name_of(source_file) == "org.package.A"
+    assert JavaLanguage.import_name_of(source_file) == "org.package.A"
 
 
 def test_single_import_strategy():
-    source_file = generate_source_file("A.java", [])
+    source_file = generate_source_file("B.java", [])
     test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
 
     repository = MockRepository(
@@ -117,10 +123,10 @@ def test_single_import_strategy():
 
 
 def test_multiple_import():
-    source_file = generate_source_file("A.java", [])
-    source_file2 = generate_source_file("B.java", [])
+    source_file = generate_source_file("C.java", [])
+    source_file2 = generate_source_file("D.java", [])
     test_file = generate_test_file(
-        "TestA.java", generate_test_code([source_file, source_file2])
+        "TestB.java", generate_test_code([source_file, source_file2])
     )
 
     repository = MockRepository(
@@ -135,9 +141,9 @@ def test_multiple_import():
 
 
 def test_single_import_multiple_source():
-    source_file = generate_source_file("A.java", [])
-    source_file2 = generate_source_file("B.java", [])
-    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
+    source_file = generate_source_file("E.java", [])
+    source_file2 = generate_source_file("F.java", [])
+    test_file = generate_test_file("TestC.java", generate_test_code([source_file]))
 
     repository = MockRepository(
         files=Files(source_files={source_file, source_file2}, test_files={test_file})
@@ -151,8 +157,8 @@ def test_single_import_multiple_source():
 
 
 def test_single_import_multiple_test_single_source():
-    source_file = generate_source_file("A.java", [])
-    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
+    source_file = generate_source_file("G.java", [])
+    test_file = generate_test_file("TestD.java", generate_test_code([source_file]))
     test_file2 = generate_test_file(
         "TestAOther.java", generate_test_code([source_file])
     )
@@ -172,10 +178,10 @@ def test_single_import_multiple_test_single_source():
 
 
 def test_single_import_multiple_test_multiple_source():
-    source_file = generate_source_file("A.java", [])
-    source_file2 = generate_source_file("B.java", [])
-    test_file = generate_test_file("TestA.java", generate_test_code([source_file]))
-    test_file2 = generate_test_file("TestB.java", generate_test_code([source_file2]))
+    source_file = generate_source_file("H.java", [])
+    source_file2 = generate_source_file("I.java", [])
+    test_file = generate_test_file("TestE.java", generate_test_code([source_file]))
+    test_file2 = generate_test_file("TestF.java", generate_test_code([source_file2]))
 
     repository = MockRepository(
         files=Files(
