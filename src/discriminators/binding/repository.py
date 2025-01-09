@@ -58,7 +58,7 @@ class JavaRepository(Repository):
             if "@Test" in line:
                 return True
         return False
-        
+
     @cached_property
     def tests(self) -> set[TestFile]:
         return {
