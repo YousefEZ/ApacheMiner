@@ -17,13 +17,13 @@ from src import apache_list, driller, github_scraper
 from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
 from src.discriminators.binding.repositories.factory import repository_factory
+from src.discriminators.binding.repositories.languages.factory import (
+    get_repository_language,
+)
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.discriminators.file_types import FileChanges
 from src.driver import generate_driver
 from src.git_progress import CloneProgress
-from src.discriminators.binding.repositories.languages.factory import (
-    get_repository_language,
-)
 from src.spmf.association import analyze_apriori, apriori
 
 P = ParamSpec("P")
@@ -200,9 +200,9 @@ def repositories(
         console.print(f"Found [cyan]{len(rows)}[/cyan] repositories")
         task_id = progress._task_index
         for idx, row in enumerate(progress.track(rows)):
-            progress.tasks[
-                task_id
-            ].description = f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            progress.tasks[task_id].description = (
+                f"Drilling Repositories [{idx+1}/{len(rows)}]..."
+            )
             driller.drill_repository(
                 row["repository"],
                 output[1].replace(output[0], row["name"]),

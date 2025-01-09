@@ -10,12 +10,12 @@ from git import Repo
 from urllib3 import request
 
 from src.custom_types.commit import CommitProtocol, ModifiedFileProtocol
-from src.discriminators.transaction import modification_map
 from src.discriminators.binding.repositories.languages.factory import (
     get_repository_language,
     language_factory,
 )
 from src.discriminators.binding.repositories.languages.language import Language
+from src.discriminators.transaction import modification_map
 from src.squash_reverse import UnSquashedCommit, expand_squash_merge, get_squash_merges
 
 

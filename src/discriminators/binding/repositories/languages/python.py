@@ -1,5 +1,5 @@
-from functools import lru_cache
 import re
+from functools import lru_cache
 from typing import Optional
 
 from src.discriminators.binding.file_types import ProgramFile

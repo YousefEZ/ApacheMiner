@@ -8,10 +8,7 @@ from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.discriminator import Discriminator, Statistics
 from src.discriminators.file_types import FileChanges
-from src.discriminators.transaction import (
-    TransactionBuilder,
-    TransactionLog,
-)
+from src.discriminators.transaction import TransactionBuilder, TransactionLog
 
 console = rich.console.Console()
 
