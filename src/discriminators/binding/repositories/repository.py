@@ -2,7 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Generator, NamedTuple, Type, TypeVar
+from typing import Generator, NamedTuple, Protocol, Type, TypeVar
 
 from src.discriminators.binding.file_types import ProgramFile, SourceFile, TestFile
 from src.discriminators.binding.repositories.languages.language import Language
@@ -28,8 +28,16 @@ def _all_files_in_directory(directory: str, suffix: str) -> Generator[str, None,
                 yield root + os.path.sep + file
 
 
+class RepositoryProtocol(Protocol):
+    @cached_property
+    def files(self) -> Files: ...
+
+    @property
+    def language(self) -> Type[Language]: ...
+
+
 @dataclass(frozen=True)
-class Repository(ABC):
+class Repository(ABC, RepositoryProtocol):
     root: str
 
     @cached_property

@@ -8,7 +8,7 @@ import rich.progress
 
 from src.discriminators.binding.file_types import ProgramFile, SourceFile
 from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.repositories.repository import Repository
+from src.discriminators.binding.repositories.repository import RepositoryProtocol
 from src.discriminators.binding.strategy import BindingStrategy
 
 
@@ -16,7 +16,7 @@ from src.discriminators.binding.strategy import BindingStrategy
 class ImportStrategy(BindingStrategy):
     """This strategy of binding is based on the import statements in the java files."""
 
-    repository: Repository
+    repository: RepositoryProtocol
 
     @lru_cache
     def fetch_links(self, file: ProgramFile) -> set[SourceFile]:

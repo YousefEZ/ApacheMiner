@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.repositories.repository import Repository
+from src.discriminators.binding.repositories.repository import RepositoryProtocol
 from src.discriminators.binding.strategy import BindingStrategy
 
 
@@ -12,7 +12,7 @@ class NameStrategy(BindingStrategy):
     """This strategy of binding is based on the name of the java files,
     and the test class."""
 
-    repository: Repository
+    repository: RepositoryProtocol
 
     def graph(self) -> Graph:
         files = self.repository.files
