@@ -74,7 +74,7 @@ class BeforeAfterDiscriminator(Discriminator):
                 ), f"Source file not found {source_file.name} @ {path}"
                 commit = self.transaction.transactions.first_occurrence(file_number)
                 assert commit
-                if commit.number < base_commit.number:
+                if commit.number <= base_commit.number:
                     before.append(source_file)
                 else:
                     after.append(source_file)
