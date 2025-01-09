@@ -16,7 +16,6 @@ from src.discriminators.transaction import (
     Transactions,
 )
 
-
 console = rich.console.Console()
 
 
