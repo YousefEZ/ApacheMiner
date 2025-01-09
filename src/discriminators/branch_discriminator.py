@@ -1,5 +1,4 @@
 import csv
-import json
 import os
 from dataclasses import dataclass
 from functools import cached_property
@@ -19,8 +18,6 @@ from src.discriminators.file_types import FileChanges
 from src.discriminators.transaction import (
     TransactionBuilder,
     TransactionLog,
-    TransactionMap,
-    Transactions,
 )
 
 console = rich.console.Console()
@@ -225,9 +222,8 @@ class BranchStatistics(Statistics):
 
 @dataclass(frozen=True)
 class BranchDiscriminator(Discriminator):
-    transaction: TransactionLog
-    file_binder: BindingStrategy
     commit_data: list[FileChanges]
+    file_binder: BindingStrategy
 
     def process_branch(self, branch: Branch, graph: Graph) -> BranchResults:
         log = branch.make_log()
@@ -290,19 +286,14 @@ class BranchDiscriminator(Discriminator):
 
 
 if __name__ == "__main__":
-    with open("transactions.txt") as t, open("mapping.json") as m:
-        transactions = Transactions.model_validate(json.load(t))
-        mapping = TransactionMap.model_validate(json.load(m))
-
-    transaction_log = TransactionLog(transactions=transactions, mapping=mapping)
     file_name = "zookeeper.csv"
 
     with open(file_name, "r") as commit_file:
         data = cast(list[FileChanges], list(csv.DictReader(commit_file)))
+    strategy = ImportStrategy(JavaRepository(os.path.abspath("../zookeeper")))
 
     discriminator = BranchDiscriminator(
-        transaction=transaction_log,
-        file_binder=ImportStrategy(JavaRepository(os.path.abspath("../zookeeper"))),
         commit_data=data,
+        file_binder=ImportStrategy(JavaRepository(os.path.abspath("../zookeeper"))),
     )
     print(discriminator.statistics.output())
