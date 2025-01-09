@@ -29,7 +29,7 @@ class ImportStrategy(BindingStrategy):
                     + java_file.name.replace(".java", "")
                 )
 
-        return None # default package
+        return None  # default package
 
     @lru_cache
     def fetch_import_names(self, java_file: ProgramFile) -> set[str]:
