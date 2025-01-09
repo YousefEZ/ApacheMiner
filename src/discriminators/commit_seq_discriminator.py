@@ -96,35 +96,41 @@ class CommitSequenceDiscriminator(Discriminator):
     ) -> Optional[Commit]:
         """Find the next commit which modifies the file with a feature addition"""
         for commit in commits:
-            if file_number in commit.file_numbers:
-                file_commit = self.get_fc(commit, file_number)
-                if self.adds_features(file_commit):
-                    return commit
+            if file_number not in commit.file_numbers:
+                continue
+
+            file_commit = self.get_fc(commit, file_number)
+            if self.adds_features(file_commit):
+                return commit
         return None
 
     def tfd_iterations(
         self,
-        range: tuple[int, int],
+        commit_range: tuple[int, int],
         tests: set[TestFile],
         source_name: str,
     ) -> dict[TestFile, list[int]]:
         """Within the range of commits, find the test files which are updated
         with new methods that call to the source file"""
         hits: dict[TestFile, list[int]] = defaultdict(list)
-        for commit in self.transaction.transactions.commits[range[0] : range[1] + 1]:
+        for commit in self.transaction.transactions.commits[
+            commit_range[0] : commit_range[1] + 1
+        ]:
             for test_file in tests:
                 path = FileName(test_file.path)
                 test_id = self.transaction.mapping.name_to_id[path]
-                if test_id in commit.file_numbers:
-                    file_commit = self.get_fc(commit, test_id)
-                    if self.adds_features(file_commit):
-                        if file_commit.modification_type == ModificationType.MODIFY:
-                            if source_name in file_commit.classes_used:
-                                hits[test_file].append(commit.number)
-                                # test file updated with new methods and calls to source
-                        else:
-                            hits[test_file].append(commit.number)
-                            # relevant test file ADDED
+                if test_id not in commit.file_numbers:
+                    continue
+
+                file_commit = self.get_fc(commit, test_id)
+                if not self.adds_features(file_commit):
+                    continue
+
+                if (
+                    file_commit.modification_type != ModificationType.MODIFY
+                    or source_name in file_commit.classes_used
+                ):
+                    hits[test_file].append(commit.number)
         return hits
 
     @property
@@ -159,7 +165,7 @@ class CommitSequenceDiscriminator(Discriminator):
             ):
                 # find test files updated with new methods calling to the source file
                 hits = self.tfd_iterations(
-                    range=(last_commit.number, this_commit.number),
+                    commit_range=(last_commit.number, this_commit.number),
                     tests=graph.source_to_test_links[source_file],
                     source_name=source_file.name.replace(".java", ""),
                 )
