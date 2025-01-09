@@ -55,6 +55,7 @@ def get_defined_method(line: str) -> Optional[str]:
         if match is None:
             return None
         method_parts = line[match.span()[0] : match.span()[1]].split()
+        method_name: Optional[str] = None
         for i, part in enumerate(method_parts):
             if "(" in part:
                 if part.startswith("("):
@@ -63,6 +64,7 @@ def get_defined_method(line: str) -> Optional[str]:
                 else:
                     method_name = method_parts[i].split("(")[0]
                 # function(internal) or function( internal )
+        assert method_name is not None, f"Method name not found in line: {line}"
         return method_name
     return None
 
@@ -99,17 +101,22 @@ def get_new_methods(diffs: dict[str, list[tuple[int, str]]]) -> set[str]:
     return plus_methods - minus_methods
 
 
-def modify_return(file: ModifiedFileProtocol, delimiter: str) -> str:
-    assert file.new_path
-    if file.new_path.endswith(".java"):
-        added_methods = get_new_methods(file.diff_parsed)
-        if len(added_methods) > 0:
+def get_new_methods_from_file(file: ModifiedFileProtocol, delimiter: str) -> str:
+    if file.change_type == pydriller.ModificationType.MODIFY:
+        assert file.new_path is not None
+        if file.new_path.endswith(".java"):
+            added_methods = get_new_methods(file.diff_parsed)
+            return delimiter.join(added_methods)
+    return ""
+
+
+def get_classes_used_from_file(file: ModifiedFileProtocol, delimiter: str) -> str:
+    if file.change_type == pydriller.ModificationType.MODIFY:
+        assert file.new_path is not None
+        if file.new_path.endswith(".java"):
             classes_referenced = get_classes_used(file.diff_parsed)
-            return (
-                f"{file.new_path}{delimiter}"
-                + f"{added_methods}{delimiter}{classes_referenced}"
-            )
-    return file.new_path
+            return delimiter.join(classes_referenced)
+    return ""
 
 
 def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
@@ -126,7 +133,8 @@ def format_file(file: ModifiedFileProtocol, delimiter: str = "|") -> str:
         assert file.new_path
         return file.new_path
     elif file.change_type == pydriller.ModificationType.MODIFY:
-        return modify_return(file, delimiter)
+        assert file.new_path
+        return file.new_path
 
     assert False, f"Unknown change type: {file.change_type}"
 
@@ -199,7 +207,15 @@ def drill_repository(
             f"Fetching commits for [cyan]{path}[/cyan]", total=commit_count
         )
         writer = csv.DictWriter(
-            f, fieldnames=["hash", "parents", "file", "modification_type"]
+            f,
+            fieldnames=[
+                "hash",
+                "parents",
+                "file",
+                "modification_type",
+                "new_methods",
+                "classes_used",
+            ],
         )
         writer.writeheader()
         for commit in stiched_commits(path, progress, reverse_squash_merge):
@@ -212,6 +228,8 @@ def drill_repository(
                         "parents": delimiter.join(commit.parents),
                         "file": "",
                         "modification_type": "",
+                        "new_methods": "",
+                        "classes_used": "",
                     }
                 )
 
@@ -222,6 +240,8 @@ def drill_repository(
                         "parents": delimiter.join(commit.parents),
                         "file": format_file(file, delimiter),
                         "modification_type": modification_map[file.change_type],
+                        "new_methods": get_new_methods_from_file(file, delimiter),
+                        "classes_used": get_classes_used_from_file(file, delimiter),
                     }
                 )
 
