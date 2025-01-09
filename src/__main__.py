@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+import sys
 import tempfile
 from itertools import chain
 from typing import Optional, ParamSpec, cast
@@ -49,7 +50,11 @@ def fetch(): ...
 @click.option("--dir", "-d", type=click.Path(), required=True)
 @click.argument("targets", type=str, nargs=-1)
 def clone(dir: str, targets: list[str]) -> None:
-    stdin_targets = click.get_text_stream("stdin").read().splitlines()
+    stdin_targets = (
+        click.get_text_stream("stdin").read().splitlines()
+        if not sys.stdin.isatty()
+        else tuple()
+    )
     for idx, repo in enumerate(
         (
             target
@@ -320,7 +325,7 @@ def run_discriminator(
     binding: Strategies,
     reverse_squash: bool,
 ) -> None:
-    OUTPUT_FILE = f"{dir}/commits.csv"
+    OUTPUT_FILE = f"{dir}/commits{'_squash_reversed' if reverse_squash else ''}.csv"
     if not os.path.exists(OUTPUT_FILE):
         console.print(f"Drilling repository from {dir}")
         with rich.progress.Progress() as progress:
@@ -329,12 +334,9 @@ def run_discriminator(
 
     with open(OUTPUT_FILE, "r") as f:
         data = cast(list[FileChanges], list(csv.DictReader(f)))
-        transaction_log = transaction.TransactionLog.from_commit_log(data)
 
     binding_strategy = strategy_factory[binding](JavaRepository(dir))
-    discriminator = discriminator_factory[discriminator_type](
-        transaction_log, binding_strategy
-    )
+    discriminator = discriminator_factory[discriminator_type](data, binding_strategy)
     statistics = discriminator.statistics
 
     console.print(statistics.output())
