@@ -46,14 +46,18 @@ class JavaRepository(Repository):
 
     @cached_property
     def source_files(self) -> set[SourceFile]:
+        test_paths = {file.path for file in self.tests}
         return {
             SourceFile(project=file.project, path=file.path)
-            for file in self.all_files.difference(self.tests)
+            for file in self.all_files
+            if file.path not in test_paths
         }
 
     def is_test(self, file: ProgramFile) -> bool:
-        with open(os.path.join(file.project, file.path)) as f:
-            return "@Test" in f.read()
+        for line in file.get_source_code():
+            if "@Test" in line:
+                return True
+        return False
 
     @cached_property
     def tests(self) -> set[TestFile]:

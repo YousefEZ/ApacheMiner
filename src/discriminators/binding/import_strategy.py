@@ -20,7 +20,7 @@ class ImportStrategy(BindingStrategy):
 
     @staticmethod
     @lru_cache
-    def import_name_of(java_file: ProgramFile) -> str:
+    def import_name_of(java_file: ProgramFile) -> Optional[str]:
         for line in java_file.get_source_code():
             if "package" in line:
                 return (
@@ -28,7 +28,8 @@ class ImportStrategy(BindingStrategy):
                     + "."
                     + java_file.name.replace(".java", "")
                 )
-        raise ValueError(f"Cannot find package name in {java_file.abs_path}")
+
+        return None # default package
 
     @lru_cache
     def fetch_import_names(self, java_file: ProgramFile) -> set[str]:
