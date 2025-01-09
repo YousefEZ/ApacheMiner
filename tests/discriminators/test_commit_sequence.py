@@ -14,10 +14,7 @@ from src.discriminators.binding.file_types import (
 from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.repositories.languages.java import JavaLanguage
 from src.discriminators.binding.repositories.languages.language import Language
-from src.discriminators.binding.repositories.repository import (
-    Files,
-    RepositoryProtocol,
-)
+from src.discriminators.binding.repositories.repository import Files, RepositoryProtocol
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.commit_seq_discriminator import CommitSequenceDiscriminator
 from src.discriminators.file_types import FileChanges
