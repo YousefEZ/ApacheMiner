@@ -320,7 +320,7 @@ def run_discriminator(
     binding: Strategies,
     reverse_squash: bool,
 ) -> None:
-    OUTPUT_FILE = f"{dir}/commits.csv"
+    OUTPUT_FILE = f"{dir}/commits{'_squash_reversed' if reverse_squash else ''}.csv"
     if not os.path.exists(OUTPUT_FILE):
         console.print(f"Drilling repository from {dir}")
         with rich.progress.Progress() as progress:
