@@ -22,14 +22,11 @@ class Stats:
     source: SourceFile
     changed_tests_per_commit: list[dict[TestFile, list[int]]]
 
-    @cached_property
-    def is_tfd(self) -> bool:
+    def is_tfd(self, threshold: float) -> bool:
         """Each time the source is committed, at least one test file updated
         with new methods that call to the source file"""
-        for changed_tests in self.changed_tests_per_commit:
-            if len(changed_tests) == 0:
-                return False
-        return True
+        tfd = len(list(filter(lambda x: len(x) > 0, self.changed_tests_per_commit)))
+        return tfd / len(self.changed_tests_per_commit) >= threshold
 
 
 @dataclass(frozen=True)
@@ -37,31 +34,36 @@ class TestedFirstStatistics(Statistics):
     test_statistics: list[Stats]
     graph: Graph
 
-    @cached_property
-    def test_first(self) -> set[SourceFile]:
+    def test_first(self, threshold: float) -> set[SourceFile]:
         """Set of source files which are classed as having TFD"""
-        return set(
-            [statistic.source for statistic in self.test_statistics if statistic.is_tfd]
-        )
+        return {
+            statistic.source
+            for statistic in self.test_statistics
+            if statistic.is_tfd(threshold)
+        }
 
-    @cached_property
-    def non_test_first(self) -> set[SourceFile]:
+    def non_test_first(self, threshold: float) -> set[SourceFile]:
         """Set of source files which are classed as not having TFD"""
-        return (
-            set([statistic.source for statistic in self.test_statistics])
-            - self.test_first
-        )
+        return {
+            statistic.source for statistic in self.test_statistics
+        } - self.test_first(threshold)
 
     @property
     def untested_source_files(self) -> set[SourceFile]:
-        return (self.graph.source_files - self.test_first) - self.non_test_first
+        return {source_file for source_file in self.graph.source_files} - {
+            statistic.source for statistic in self.test_statistics
+        }
 
     def output(self) -> str:
-        return (
-            f"Test First Updates: {len(self.test_first)}\n"
-            + f"Test Elsewhere: {len(self.non_test_first)}\n"
-            + f"Untested Files: {len(self.untested_source_files)}\n"
-        )
+        thresholds = (1.0, 0.75, 0.5)
+        string = ""
+        for threshold in thresholds:
+            string += (
+                f"Threshold: {threshold}\n"
+                f"Test First Updates: {len(self.test_first(threshold))}\n"
+                + f"Test Elsewhere: {len(self.non_test_first(threshold))}\n"
+            )
+        return string + f"Untested Files: {len(self.untested_source_files)}\n"
 
 
 @dataclass(frozen=True)
@@ -108,7 +110,6 @@ class CommitSequenceDiscriminator(Discriminator):
         self,
         commit_range: tuple[int, int],
         tests: set[TestFile],
-        source_name: str,
     ) -> dict[TestFile, list[int]]:
         """Within the range of commits, find the test files which are updated
         with new methods that call to the source file"""
@@ -126,11 +127,7 @@ class CommitSequenceDiscriminator(Discriminator):
                 if not self.adds_features(file_commit):
                     continue
 
-                if (
-                    file_commit.modification_type != ModificationType.MODIFY
-                    or source_name in file_commit.classes_used
-                ):
-                    hits[test_file].append(commit.number)
+                hits[test_file].append(commit.number)
         return hits
 
     @property
@@ -167,7 +164,6 @@ class CommitSequenceDiscriminator(Discriminator):
                 hits = self.tfd_iterations(
                     commit_range=(last_commit.number, this_commit.number),
                     tests=graph.source_to_test_links[source_file],
-                    source_name=source_file.name.replace(".java", ""),
                 )
                 stats.changed_tests_per_commit.append(hits)
 
