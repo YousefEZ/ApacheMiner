@@ -81,9 +81,7 @@ class RecursiveImportStrategy(ImportStrategy):
         if visited is None:
             visited = set()
         links: set[SourceFile] = super().fetch_links(target).copy()
-        for link in self.fetch_links(target):
-            if link in visited:
-                continue
+        for link in list(filter(lambda l: l not in visited, links)):
             visited.add(link)
             links.update(self.recursive_links(link, visited))
 
