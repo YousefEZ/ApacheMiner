@@ -26,6 +26,8 @@ class Stats:
         """Each time the source is committed, at least one test file updated
         with new methods that call to the source file"""
         tfd = len(list(filter(lambda x: len(x) > 0, self.changed_tests_per_commit)))
+        if not self.changed_tests_per_commit:
+            return False
         return tfd / len(self.changed_tests_per_commit) >= threshold
 
 
