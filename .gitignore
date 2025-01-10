@@ -168,3 +168,10 @@ cython_debug/
 # Mac stuff
 .DS_Store
 .repositories/
+
+*.txt
+runner.sh
+picker.py
+csvremover.sh
+apache_projects_commits_final.csv
+repositories

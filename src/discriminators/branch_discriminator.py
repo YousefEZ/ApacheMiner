@@ -143,7 +143,7 @@ class CommitLog:
             at B and the tail at E
         """
         node = tail
-        while node.parents[0].hash not in self._main_branch.commits:
+        while len(node.parents)>0 and node.parents[0].hash not in self._main_branch.commits:
             node = node.parents[0]
         return Branch(node, tail)
 
