@@ -62,6 +62,20 @@ class CommitLog:
         self._commits = changes
         self._nodes: dict[str, CommitNode] = {}
         self._main_branch = self._make_tree()
+        root_commits = self._root_commits()
+        assert (
+            len(root_commits) == 1
+        ), "Multiple root commits detected. Unable to form clean commit log"
+        assert (
+            root_commits[0] == self._main_branch.head.hash
+        ), f"Root cannot be established, as root commit identified as {root_commits[0]}, but main branch head is {self._main_branch.head.hash}"
+
+    def _root_commits(self) -> list[str]:
+        return [
+            commit_hash
+            for commit_hash, commit in self._commits
+            if not commit[0]["parents"]
+        ]
 
     def _locate_changes(self, commit_hash: str) -> list[FileChanges]:
         for idx in range(len(self._commits)):
