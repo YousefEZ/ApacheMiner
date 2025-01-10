@@ -68,7 +68,7 @@ class CommitLog:
         ), "Multiple root commits detected. Unable to form clean commit log"
         assert (
             root_commits[0] == self._main_branch.head.hash
-        ), f"Root cannot be established, as root commit identified as {root_commits[0]}, but main branch head is {self._main_branch.head.hash}"
+        ), f"Root unknown, as {root_commits[0]} != {self._main_branch.head.hash}"
 
     def _root_commits(self) -> list[str]:
         return [
