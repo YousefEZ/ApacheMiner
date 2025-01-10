@@ -40,8 +40,8 @@ class BeforeAfterStatistics(Statistics):
         return set().union(*[statistic.after for statistic in self.test_statistics])
 
     @cached_property
-    def test_first(self) -> set[SourceFile]:
-        return self.aggregate_before - self.aggregate_after
+    def test_after(self) -> set[SourceFile]:
+        return self.aggregate_after - self.aggregate_before
 
     @property
     def untested_source_files(self) -> set[SourceFile]:
@@ -49,8 +49,8 @@ class BeforeAfterStatistics(Statistics):
 
     def output(self) -> str:
         return (
-            f"Test First: {len(self.test_first)}\n"
-            + f"Test After: {len(self.aggregate_after)}\n"
+            f"Test First: {len(self.aggregate_before)}\n"
+            + f"Test After: {len(self.test_after)}\n"
             + f"Untested Files: {len(self.untested_source_files)}\n"
         )
 
