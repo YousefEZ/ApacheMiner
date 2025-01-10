@@ -191,9 +191,11 @@ def test_output_format():
     commit_list = []
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
-    assert (
-        discriminator.statistics.output()
-        == "Threshold: 1.0\nTest First Updates: 0\nTest Elsewhere: 0\nThreshold: 0.75\nTest First Updates: 0\nTest Elsewhere: 0\nThreshold: 0.5\nTest First Updates: 0\nTest Elsewhere: 0\nUntested Files: 0"
+    assert discriminator.statistics.output() == (
+        "Threshold: 1.0\nTest First Updates: 0\nTest Elsewhere: 0\n"
+        "Threshold: 0.75\nTest First Updates: 0\nTest Elsewhere: 0\n"
+        "Threshold: 0.5\nTest First Updates: 0\nTest Elsewhere: 0\n"
+        "Untested Files: 0"
     )
 
 
