@@ -63,7 +63,7 @@ class TestedFirstStatistics(Statistics):
                 f"Test First Updates: {len(self.test_first(threshold))}\n"
                 + f"Test Elsewhere: {len(self.non_test_first(threshold))}\n"
             )
-        return string + f"Untested Files: {len(self.untested_source_files)}\n"
+        return string + f"Untested Files: {len(self.untested_source_files)}"
 
 
 @dataclass(frozen=True)
