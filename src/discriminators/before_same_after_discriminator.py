@@ -28,7 +28,7 @@ class TestStatistics:
 
 
 @dataclass(frozen=True)
-class BeforeAfterStatistics(Statistics):
+class BeforeSameAfterStatistics(Statistics):
     test_statistics: list[TestStatistics]
     graph: Graph
 
@@ -68,7 +68,7 @@ class BeforeAfterStatistics(Statistics):
 
 
 @dataclass(frozen=True)
-class BeforeAfterDiscriminator(Discriminator):
+class BeforeSameAfterDiscriminator(Discriminator):
     commit_data: list[FileChanges]
     file_binder: BindingStrategy
 
@@ -79,7 +79,7 @@ class BeforeAfterDiscriminator(Discriminator):
         )
 
     @property
-    def statistics(self) -> BeforeAfterStatistics:
+    def statistics(self) -> BeforeSameAfterStatistics:
         output = []
         graph = self.file_binder.graph()
         print(f"Graph has {len(graph.test_files)} test files")
@@ -109,7 +109,7 @@ class BeforeAfterDiscriminator(Discriminator):
                 output.append(
                     TestStatistics(test, before=before, after=after, same=same)
                 )
-        return BeforeAfterStatistics(test_statistics=output, graph=graph)
+        return BeforeSameAfterStatistics(test_statistics=output, graph=graph)
 
 
 if __name__ == "__main__":
