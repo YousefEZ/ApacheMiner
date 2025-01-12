@@ -7,7 +7,7 @@ from typing import Optional, Self, cast
 
 import rich.progress
 
-from src.discriminators.before_after_discriminator import TestStatistics
+from src.discriminators.before_same_after_discriminator import TestStatistics
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.import_strategy import ImportStrategy
@@ -250,7 +250,7 @@ class BranchDiscriminator(Discriminator):
             file_number = log.mapping.name_to_id[path]
             base_commit = log.transactions.first_occurrence(file_number)
             assert base_commit is not None, f"File not found {test.name} @ {path}"
-            before, after = [], []
+            before, same, after = [], [], []
             for source_file in graph.test_to_source_links[test].intersection(
                 source_subset
             ):
@@ -263,10 +263,14 @@ class BranchDiscriminator(Discriminator):
                 assert commit
                 if commit.number < base_commit.number:
                     before.append(source_file)
+                elif commit.number == base_commit.number:
+                    same.append(source_file)
                 else:
                     after.append(source_file)
             if before or after:
-                output.append(TestStatistics(test, before, after))
+                output.append(
+                    TestStatistics(test, before=before, after=after, same=same)
+                )
 
         stats = TotalBranchResults(test_statistics=output, source_files=source_subset)
         return BranchResults(
