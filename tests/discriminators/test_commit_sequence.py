@@ -192,9 +192,9 @@ def test_output_format():
     transactions, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(transactions, binding_strategy)
     assert discriminator.statistics.output() == (
-        "Threshold: 1.0\nTest First Updates: 0\nTest Elsewhere: 0\n"
-        "Threshold: 0.75\nTest First Updates: 0\nTest Elsewhere: 0\n"
-        "Threshold: 0.5\nTest First Updates: 0\nTest Elsewhere: 0\n"
+        "Threshold: 1.0\nTest First Updates: 0\nTest Elsewhere: 0\nSame Commit: 0%\n"
+        "Threshold: 0.75\nTest First Updates: 0\nTest Elsewhere: 0\nSame Commit: 0%\n"
+        "Threshold: 0.5\nTest First Updates: 0\nTest Elsewhere: 0\nSame Commit: 0%\n"
         "Untested Files: 0"
     )
 
@@ -219,6 +219,7 @@ def test_found_tfd_split_commits():
     assert stats.test_first(1.0) == {sourceA}
     assert stats.non_test_first(1.0) == set()
     assert stats.untested_source_files == set()
+    assert stats.same_commit_count({sourceA}) == 0
 
     # test case with multiple commits
     commit_list.append(
@@ -245,11 +246,7 @@ def test_found_tfd_split_commits():
     assert stats.test_first(1.0) == {sourceA}
     assert stats.non_test_first(1.0) == set()
     assert stats.untested_source_files == set()
-
-    # assert (
-    #    discriminator.statistics.output()
-    #    == "Test First Updates: 1\nTest Elsewhere: 0\nUntested Files: 0\n"
-    # )
+    assert stats.same_commit_count({sourceA}) == 0
 
 
 def test_found_tfd_same_commits():
@@ -270,6 +267,7 @@ def test_found_tfd_same_commits():
     assert stats.test_first(1.0) == {sourceA}
     assert stats.non_test_first(1.0) == set()
     assert stats.untested_source_files == set()
+    assert stats.same_commit_count({sourceA}) == 100
 
     # test case with multiple commits
     commit_list.append(
@@ -291,6 +289,7 @@ def test_found_tfd_same_commits():
     assert stats.test_first(1.0) == {sourceA}
     assert stats.non_test_first(1.0) == set()
     assert stats.untested_source_files == set()
+    assert stats.same_commit_count({sourceA}) == 100
 
 
 def test_failed_tfd():
@@ -333,6 +332,7 @@ def test_failed_tfd():
     assert stats.test_first(1.0) == set()
     assert stats.non_test_first(1.0) == {sourceA}
     assert stats.untested_source_files == set()
+    assert stats.same_commit_count({sourceA}) == 100
 
     # source commited before test
     commit_list.append(
@@ -353,6 +353,7 @@ def test_failed_tfd():
     assert stats.test_first(1.0) == set()
     assert stats.non_test_first(1.0) == {sourceA}
     assert stats.untested_source_files == set()
+    assert stats.same_commit_count({sourceA}) == 100
 
 
 def test_only_one_testfile_change_needed():
@@ -387,14 +388,19 @@ def test_only_one_testfile_change_needed():
     commit_data, binding_strategy = generate(files, commit_list)
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = discriminator.statistics.test_statistics[0]
+    stats_sourceA = None
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
             stats_sourceA = stats
             break
+    assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
-    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
-    assert stats_sourceA.changed_tests_per_commit[1] == {testA: [1]}
+    assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {
+        testA: [0],
+        testAB: [0],
+    }
+    assert list(stats_sourceA.changed_tests_per_commit.values())[1] == {testA: [1]}
+    assert stats_sourceA.same_commit() == 0.5
 
 
 def test_other_modification_types_not_counted():
@@ -430,15 +436,20 @@ def test_other_modification_types_not_counted():
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = discriminator.statistics.test_statistics[0]
+    stats_sourceA = None
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
             stats_sourceA = stats
             break
+    assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 2
-    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
-    assert stats_sourceA.changed_tests_per_commit[1] == {testAB: [1]}
+    assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {
+        testA: [0],
+        testAB: [0],
+    }
+    assert list(stats_sourceA.changed_tests_per_commit.values())[1] == {testAB: [1]}
+    assert stats_sourceA.same_commit() == 0.5
 
 
 def test_non_feature_additive_changes_not_counted():
@@ -467,8 +478,6 @@ def test_non_feature_additive_changes_not_counted():
                     frozenset(),
                 ),
             ),
-        },
-        {
             (sourceA, (modification_type.MODIFY, frozenset({"method"}), frozenset())),
         },
     ]
@@ -477,15 +486,20 @@ def test_non_feature_additive_changes_not_counted():
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = discriminator.statistics.test_statistics[0]
+    stats_sourceA = None
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
             stats_sourceA = stats
             break
+    assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 2
-    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
-    assert stats_sourceA.changed_tests_per_commit[1] == {testA: [1]}
+    assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {
+        testA: [0],
+        testAB: [0],
+    }
+    assert list(stats_sourceA.changed_tests_per_commit.values())[1] == {testA: [1]}
+    assert stats_sourceA.same_commit() == 1.0
 
 
 def test_test_other_source_not_counted():
@@ -524,15 +538,20 @@ def test_test_other_source_not_counted():
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = discriminator.statistics.test_statistics[0]
+    stats_sourceA = None
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
             stats_sourceA = stats
             break
+    assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 2
-    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0], testAB: [0]}
-    assert stats_sourceA.changed_tests_per_commit[1] == {testAB: [1]}
+    assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {
+        testA: [0],
+        testAB: [0],
+    }
+    assert list(stats_sourceA.changed_tests_per_commit.values())[1] == {testAB: [1]}
+    assert stats_sourceA.same_commit() == 0.5
 
 
 def test_end_when_file_deleted():
@@ -561,11 +580,12 @@ def test_end_when_file_deleted():
     ]
     commit_data, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = discriminator.statistics.test_statistics[0]
+    stats_sourceA = None
     for stats in discriminator.statistics.test_statistics:
         if stats.source == sourceA:
             stats_sourceA = stats
             break
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 1
-    assert stats_sourceA.changed_tests_per_commit[0] == {testA: [0]}
+    assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {testA: [0]}
+    assert stats_sourceA.same_commit() == 1.0

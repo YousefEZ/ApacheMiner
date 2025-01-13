@@ -20,15 +20,35 @@ console = rich.console.Console()
 @dataclass(frozen=True)
 class Stats:
     source: SourceFile
-    changed_tests_per_commit: list[dict[TestFile, list[int]]]
+    changed_tests_per_commit: dict[int, dict[TestFile, list[int]]]
+
+    @cached_property
+    def tfd_count(self) -> int:
+        return len(
+            [
+                commit
+                for commit in self.changed_tests_per_commit
+                if len(self.changed_tests_per_commit[commit]) > 0
+            ]
+        )
 
     def is_tfd(self, threshold: float) -> bool:
         """Each time the source is committed, at least one test file updated
         with new methods that call to the source file"""
-        tfd = len(list(filter(lambda x: len(x) > 0, self.changed_tests_per_commit)))
         if not self.changed_tests_per_commit:
             return False
-        return tfd / len(self.changed_tests_per_commit) >= threshold
+        return self.tfd_count / len(self.changed_tests_per_commit) >= threshold
+
+    def same_commit(self) -> float:
+        """Percentage of test files updated in the same commit as the source"""
+        assert self.tfd_count, "is_tfd called first"
+        same_commit = 0
+        for commit_no in self.changed_tests_per_commit:
+            for test_file in self.changed_tests_per_commit[commit_no]:
+                if commit_no in self.changed_tests_per_commit[commit_no][test_file]:
+                    same_commit += 1
+                    break
+        return same_commit / self.tfd_count
 
 
 @dataclass(frozen=True)
@@ -56,14 +76,31 @@ class TestedFirstStatistics(Statistics):
             statistic.source for statistic in self.test_statistics
         }
 
+    def same_commit_count(self, tfd_files: set[SourceFile]) -> int:
+        """Percentage of test files updated in the same commit as the source"""
+        if len(tfd_files) == 0:
+            return 0
+        same_commit: float = 0
+        for source_file in tfd_files:
+            source_statistic = None
+            for stat in self.test_statistics:
+                if stat.source == source_file:
+                    source_statistic = stat
+                    break
+            assert source_statistic
+            same_commit += source_statistic.same_commit()
+        return int((same_commit / len(tfd_files)) * 100)
+
     def output(self) -> str:
         thresholds = (1.0, 0.75, 0.5)
         string = ""
         for threshold in thresholds:
+            test_first = self.test_first(threshold)
             string += (
                 f"Threshold: {threshold}\n"
-                f"Test First Updates: {len(self.test_first(threshold))}\n"
+                f"Test First Updates: {len(test_first)}\n"
                 + f"Test Elsewhere: {len(self.non_test_first(threshold))}\n"
+                + f"Same Commit: {self.same_commit_count(test_first)}%\n"
             )
         return string + f"Untested Files: {len(self.untested_source_files)}"
 
@@ -147,7 +184,7 @@ class CommitSequenceDiscriminator(Discriminator):
                 continue
             path = FileName(source_file.path)
             source_id = self.transaction.mapping.name_to_id[path]
-            stats = Stats(source_file, [])
+            stats = Stats(source_file, {})
             last_commit = self.transaction.transactions.commits[0]
             this_commit: Optional[Commit] = (
                 self.transaction.transactions.first_occurrence(source_id)
@@ -167,7 +204,7 @@ class CommitSequenceDiscriminator(Discriminator):
                     commit_range=(last_commit.number, this_commit.number),
                     tests=graph.source_to_test_links[source_file],
                 )
-                stats.changed_tests_per_commit.append(hits)
+                stats.changed_tests_per_commit[this_commit.number] = hits
 
                 # setup next iteration with the next time this source file is committed
                 if this_commit.number == commit_count - 1:
