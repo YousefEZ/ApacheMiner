@@ -35,24 +35,24 @@ def logstr_to_set(string: str) -> set[str]:
     return set(strings)
 
 
-class File(BaseModel):
+class FileChange(BaseModel):
     file_number: FileNumber
     modification_type: pydriller.ModificationType
     new_methods: set[str]
     classes_used: set[str]
 
-    def __lt__(self, other: File) -> bool:
+    def __lt__(self, other: FileChange) -> bool:
         return self.file_number < other.file_number
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, File):
+        if not isinstance(other, FileChange):
             return NotImplemented
         return self.file_number == other.file_number
 
 
 class Commit(BaseModel):
     number: int
-    files: list[File]
+    files: list[FileChange]
 
     @property
     def file_numbers(self) -> list[FileNumber]:
@@ -97,7 +97,7 @@ class TransactionBuilder:
         self._name_map: dict[FileNumber, list[FileName]] = dict()
         self._transactions: list[Commit] = []
         self._mapping: dict[
-            pydriller.ModificationType, Callable[[FileChanges], Optional[File]]
+            pydriller.ModificationType, Callable[[FileChanges], Optional[FileChange]]
         ] = {
             pydriller.ModificationType.ADD: self._add,
             pydriller.ModificationType.COPY: self._copy,
@@ -130,7 +130,7 @@ class TransactionBuilder:
         return TransactionLog(transactions=result.transactions, mapping=result.mapping)
 
     def process(self, commit: list[FileChanges]):
-        items: list[File] = []
+        items: list[FileChange] = []
         for file in commit:
             if not file["file"]:
                 continue  # empty commit
@@ -149,56 +149,56 @@ class TransactionBuilder:
     def _unknown(self, _: FileChanges) -> None:
         return None
 
-    def _delete(self, _: FileChanges) -> File | None:
+    def _delete(self, _: FileChanges) -> FileChange | None:
         return None
 
-    def _add(self, file: FileChanges) -> File:
+    def _add(self, file: FileChanges) -> FileChange:
         file_name: FileName = FileName(file["file"].strip())
         if file_name in self._id_map:
             return self._modify(file)
         self._id_counter = FileNumber(1 + self._id_counter)
         self._name_map[self._id_counter] = [file_name]
         self._id_map[file_name] = self._id_counter
-        return File(
+        return FileChange(
             file_number=self._id_counter,
             modification_type=pydriller.ModificationType.ADD,
             new_methods=set(),
             classes_used=set(),
         )
 
-    def _modify(self, file: FileChanges) -> File:
+    def _modify(self, file: FileChanges) -> FileChange:
         file_name: FileName = FileName(file["file"].strip())
         new_methods = set(file["new_methods"].split("|"))
         classes_used = set(file["classes_used"].split("|"))
         if file_name not in self._id_map:
             return self._add(file)
-        return File(
+        return FileChange(
             file_number=self._id_map[file_name],
             modification_type=pydriller.ModificationType.MODIFY,
             new_methods=new_methods,
             classes_used=classes_used,
         )
 
-    def _rename(self, file: FileChanges) -> File:
+    def _rename(self, file: FileChanges) -> FileChange:
         old_name, new_name = map(FileName, file["file"].strip().split("|"))
         if old_name not in self._id_map:
             self._add({**file, "file": old_name})
         file_number = self._id_map[old_name]
         self._name_map[file_number].append(new_name)
         self._id_map[new_name] = file_number
-        return File(
+        return FileChange(
             file_number=file_number,
             modification_type=pydriller.ModificationType.MODIFY,
             new_methods=set(),
             classes_used=set(),
         )
 
-    def _copy(self, file: FileChanges) -> File:
+    def _copy(self, file: FileChanges) -> FileChange:
         file_name: FileName = FileName(file["file"].strip())
         self._id_counter = FileNumber(1 + self._id_counter)
         self._name_map[self._id_counter] = [file_name]
         self._id_map[file_name] = self._id_counter
-        return File(
+        return FileChange(
             file_number=self._id_counter,
             modification_type=pydriller.ModificationType.MODIFY,
             new_methods=set(),
