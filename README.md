@@ -22,15 +22,8 @@ poetry install
 
 ### :gear: running commands
 
-to run the set commands in the project, you can use the following command 
+you can run the cli using the following command 
 
-
-```bash 
-poetry run <command>
-
-```
-
-or you can run the cli using 
 ```bash 
 poetry run cli
 ```
