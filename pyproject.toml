@@ -39,8 +39,6 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-fetch = "src.__main__:fetch"
-analyze = "src.__main__:analyze"
 cli = "src.__main__:cli"
 
 [tool.black]
