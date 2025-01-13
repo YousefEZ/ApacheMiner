@@ -11,7 +11,7 @@ from .binding.file_types import FileName, SourceFile
 from .binding.strategy import BindingStrategy
 from .discriminator import Discriminator, Statistics
 from .file_types import FileChanges, FileNumber
-from .transaction import Commit, FileChange, TransactionBuilder, TransactionLog
+from .transaction import Commit, CommitFileChange, TransactionBuilder, TransactionLog
 
 console = rich.console.Console()
 TPM = 100000
@@ -58,7 +58,7 @@ class LLMDiscriminator(Discriminator):
             TransactionBuilder.group_file_changes(self.commit_data)
         )
 
-    def adds_features(self, file_commit_info: FileChange) -> bool:
+    def adds_features(self, file_commit_info: CommitFileChange) -> bool:
         """Does this commit add new methods to the file?"""
         if file_commit_info.modification_type == ModificationType.ADD:
             return True  # auto-accept file creations
@@ -68,7 +68,7 @@ class LLMDiscriminator(Discriminator):
             return False  # not a modification with method additions
         return True
 
-    def get_fc(self, commit: Commit, file_number: FileNumber) -> FileChange:
+    def get_fc(self, commit: Commit, file_number: FileNumber) -> CommitFileChange:
         for fc in commit.files:
             if fc.file_number == file_number:
                 return fc
