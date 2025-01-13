@@ -7,7 +7,7 @@ from typing import Optional, Self, cast
 
 import rich.progress
 
-from src.discriminators.before_after_discriminator import TestStatistics
+from src.discriminators.before_same_after_discriminator import TestStatistics
 from src.discriminators.binding.file_types import FileName, SourceFile, TestFile
 from src.discriminators.binding.graph import Graph
 from src.discriminators.binding.import_strategy import ImportStrategy
@@ -62,6 +62,20 @@ class CommitLog:
         self._commits = changes
         self._nodes: dict[str, CommitNode] = {}
         self._main_branch = self._make_tree()
+        root_commits = self._root_commits()
+        assert (
+            len(root_commits) == 1
+        ), "Multiple root commits detected. Unable to form clean commit log"
+        assert (
+            root_commits[0] == self._main_branch.head.hash
+        ), f"Root unknown, as {root_commits[0]} != {self._main_branch.head.hash}"
+
+    def _root_commits(self) -> list[str]:
+        return [
+            commit_hash
+            for commit_hash, commit in self._commits
+            if not commit[0]["parents"]
+        ]
 
     def _locate_changes(self, commit_hash: str) -> list[FileChanges]:
         for idx in range(len(self._commits)):
@@ -236,7 +250,7 @@ class BranchDiscriminator(Discriminator):
             file_number = log.mapping.name_to_id[path]
             base_commit = log.transactions.first_occurrence(file_number)
             assert base_commit is not None, f"File not found {test.name} @ {path}"
-            before, after = [], []
+            before, same, after = [], [], []
             for source_file in graph.test_to_source_links[test].intersection(
                 source_subset
             ):
@@ -249,10 +263,14 @@ class BranchDiscriminator(Discriminator):
                 assert commit
                 if commit.number < base_commit.number:
                     before.append(source_file)
+                elif commit.number == base_commit.number:
+                    same.append(source_file)
                 else:
                     after.append(source_file)
             if before or after:
-                output.append(TestStatistics(test, before, after))
+                output.append(
+                    TestStatistics(test, before=before, after=after, same=same)
+                )
 
         stats = TotalBranchResults(test_statistics=output, source_files=source_subset)
         return BranchResults(
