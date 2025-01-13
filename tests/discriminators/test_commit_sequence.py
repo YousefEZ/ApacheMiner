@@ -388,12 +388,7 @@ def test_only_one_testfile_change_needed():
     commit_data, binding_strategy = generate(files, commit_list)
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = None
-    for stats in discriminator.statistics.test_statistics:
-        if stats.source == sourceA:
-            stats_sourceA = stats
-            break
-    assert stats_sourceA
+    stats_sourceA = discriminator.statistics.test_statistics[sourceA]
     assert stats_sourceA.is_tfd(1.0)
     assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {
         testA: [0],
@@ -436,11 +431,7 @@ def test_other_modification_types_not_counted():
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = None
-    for stats in discriminator.statistics.test_statistics:
-        if stats.source == sourceA:
-            stats_sourceA = stats
-            break
+    stats_sourceA = discriminator.statistics.test_statistics[sourceA]
     assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 2
@@ -486,11 +477,7 @@ def test_non_feature_additive_changes_not_counted():
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = None
-    for stats in discriminator.statistics.test_statistics:
-        if stats.source == sourceA:
-            stats_sourceA = stats
-            break
+    stats_sourceA = discriminator.statistics.test_statistics[sourceA]
     assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 2
@@ -538,11 +525,7 @@ def test_test_other_source_not_counted():
     )
     assert binding_strategy.graph().source_to_test_links[sourceA] == {testA, testAB}
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = None
-    for stats in discriminator.statistics.test_statistics:
-        if stats.source == sourceA:
-            stats_sourceA = stats
-            break
+    stats_sourceA = discriminator.statistics.test_statistics[sourceA]
     assert stats_sourceA
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 2
@@ -580,11 +563,7 @@ def test_end_when_file_deleted():
     ]
     commit_data, binding_strategy = generate(files, commit_list)
     discriminator = CommitSequenceDiscriminator(commit_data, binding_strategy)
-    stats_sourceA = None
-    for stats in discriminator.statistics.test_statistics:
-        if stats.source == sourceA:
-            stats_sourceA = stats
-            break
+    stats_sourceA = discriminator.statistics.test_statistics[sourceA]
     assert stats_sourceA.is_tfd(1.0)
     assert len(stats_sourceA.changed_tests_per_commit) == 1
     assert list(stats_sourceA.changed_tests_per_commit.values())[0] == {testA: [0]}

@@ -19,17 +19,13 @@ console = rich.console.Console()
 
 @dataclass(frozen=True)
 class Stats:
-    source: SourceFile
     changed_tests_per_commit: dict[int, dict[TestFile, list[int]]]
 
     @cached_property
     def tfd_count(self) -> int:
-        return len(
-            [
-                commit
-                for commit in self.changed_tests_per_commit
-                if len(self.changed_tests_per_commit[commit]) > 0
-            ]
+        return sum(
+            bool(self.changed_tests_per_commit[commit])
+            for commit in self.changed_tests_per_commit
         )
 
     def is_tfd(self, threshold: float) -> bool:
@@ -53,27 +49,27 @@ class Stats:
 
 @dataclass(frozen=True)
 class TestedFirstStatistics(Statistics):
-    test_statistics: list[Stats]
+    test_statistics: dict[SourceFile, Stats]
     graph: Graph
 
     def test_first(self, threshold: float) -> set[SourceFile]:
         """Set of source files which are classed as having TFD"""
         return {
-            statistic.source
-            for statistic in self.test_statistics
-            if statistic.is_tfd(threshold)
+            statistic
+            for statistic in self.test_statistics.keys()
+            if self.test_statistics[statistic].is_tfd(threshold)
         }
 
     def non_test_first(self, threshold: float) -> set[SourceFile]:
         """Set of source files which are classed as not having TFD"""
         return {
-            statistic.source for statistic in self.test_statistics
+            statistic for statistic in self.test_statistics.keys()
         } - self.test_first(threshold)
 
     @property
     def untested_source_files(self) -> set[SourceFile]:
         return {source_file for source_file in self.graph.source_files} - {
-            statistic.source for statistic in self.test_statistics
+            statistic for statistic in self.test_statistics.keys()
         }
 
     def same_commit_count(self, tfd_files: set[SourceFile]) -> int:
@@ -82,12 +78,7 @@ class TestedFirstStatistics(Statistics):
             return 0
         same_commit: float = 0
         for source_file in tfd_files:
-            source_statistic = None
-            for stat in self.test_statistics:
-                if stat.source == source_file:
-                    source_statistic = stat
-                    break
-            assert source_statistic
+            source_statistic = self.test_statistics[source_file]
             same_commit += source_statistic.same_commit()
         return int((same_commit / len(tfd_files)) * 100)
 
@@ -172,7 +163,7 @@ class CommitSequenceDiscriminator(Discriminator):
     @property
     def statistics(self) -> TestedFirstStatistics:
         """Get set of every source file feature addition which are tested first"""
-        output = []
+        output = {}
         graph = self.file_binder.graph()
         print(f"Graph has {len(graph.test_files)} test files")
         print(f"Graph has {len(graph.source_files)} source files")
@@ -184,7 +175,7 @@ class CommitSequenceDiscriminator(Discriminator):
                 continue
             path = FileName(source_file.path)
             source_id = self.transaction.mapping.name_to_id[path]
-            stats = Stats(source_file, {})
+            stats = Stats({})
             last_commit = self.transaction.transactions.commits[0]
             this_commit: Optional[Commit] = (
                 self.transaction.transactions.first_occurrence(source_id)
@@ -216,5 +207,5 @@ class CommitSequenceDiscriminator(Discriminator):
                     source_id,
                     self.transaction.transactions.commits[this_commit.number + 1 :],
                 )
-            output.append(stats)
+            output[source_file] = stats
         return TestedFirstStatistics(test_statistics=output, graph=graph)
