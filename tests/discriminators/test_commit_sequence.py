@@ -1,6 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Type
 
 from pydriller import ModificationType as modification_type
 
@@ -11,7 +12,9 @@ from src.discriminators.binding.file_types import (
     TestFile,
 )
 from src.discriminators.binding.graph import Graph
-from src.discriminators.binding.repository import Files, Repository
+from src.discriminators.binding.repositories.languages.java import JavaLanguage
+from src.discriminators.binding.repositories.languages.language import Language
+from src.discriminators.binding.repositories.repository import Files, RepositoryProtocol
 from src.discriminators.binding.strategy import BindingStrategy
 from src.discriminators.commit_seq_discriminator import CommitSequenceDiscriminator
 from src.discriminators.file_types import FileChanges
@@ -23,8 +26,16 @@ from src.discriminators.transaction import (
 
 
 @dataclass(frozen=True)
-class MockRepository(Repository):
-    all_files: set[ProgramFile]
+class MockRepository(RepositoryProtocol):
+    _all_files: set[ProgramFile]
+
+    @cached_property
+    def all_files(self) -> set[ProgramFile]:
+        return self._all_files
+
+    @property
+    def language(self) -> Type[Language]:
+        return JavaLanguage
 
     @cached_property
     def files(self) -> Files:
@@ -38,7 +49,7 @@ class MockRepository(Repository):
 
 @dataclass(frozen=True)
 class MockBindingStrategy(BindingStrategy):
-    repository: Repository
+    repository: RepositoryProtocol
 
     def graph(self) -> Graph:
         source_file_mapping = {
@@ -113,7 +124,7 @@ def generate(
         ]
     ],
 ):
-    repository = MockRepository(all_files=files)
+    repository = MockRepository(_all_files=files)
     binding_strategy = MockBindingStrategy(repository)
 
     return convert_commit_list(commit_list), binding_strategy

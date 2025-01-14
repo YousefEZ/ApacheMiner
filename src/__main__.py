@@ -16,7 +16,10 @@ import rich.theme
 from src import apache_list, driller, github_scraper
 from src.discriminators import transaction
 from src.discriminators.binding.factory import Strategies, strategy_factory
-from src.discriminators.binding.repository import JavaRepository
+from src.discriminators.binding.repositories.factory import repository_factory
+from src.discriminators.binding.repositories.languages.factory import (
+    get_repository_language,
+)
 from src.discriminators.factory import DiscriminatorTypes, discriminator_factory
 from src.discriminators.file_types import FileChanges
 from src.driver import generate_driver
@@ -335,7 +338,11 @@ def run_discriminator(
     with open(OUTPUT_FILE, "r") as f:
         data = cast(list[FileChanges], list(csv.DictReader(f)))
 
-    binding_strategy = strategy_factory[binding](JavaRepository(dir))
+    repo_info = driller.get_repo_information(dir)
+    language = get_repository_language(f"{repo_info.org}/{repo_info.name}")
+    console.print(f"Repository language is {language}")
+    repository = repository_factory[language](dir)
+    binding_strategy = strategy_factory[binding](repository)
     discriminator = discriminator_factory[discriminator_type](data, binding_strategy)
     statistics = discriminator.statistics
 
