@@ -52,10 +52,17 @@ class PythonLanguage(Language):
         return file.name.replace(".py", "")
 
     @staticmethod
+    def is_import(line: str) -> bool:
+        "via regex, checks if it follows the form import module_name(.module_name)*"
+        return bool(re.match(r"import \w+(\.\w+)*", line)) or bool(
+            re.match(r"from \w+(\.\w+)* import \w+(\s*,\s*\w+)*", line)
+        )
+
+    @staticmethod
     @lru_cache
     def fetch_import_names(java_file: ProgramFile) -> set[str]:
         imports: set[str] = set()
-        for line in java_file.get_source_code():
+        for line in filter(PythonLanguage.is_import, java_file.get_source_code()):
             if line.startswith("import"):
                 # e.g. import src.module
                 imports.add(line.replace("import ", "").split(".")[-1])
